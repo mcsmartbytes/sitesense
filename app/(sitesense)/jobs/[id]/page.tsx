@@ -451,6 +451,25 @@ export default function JobDetailPage() {
     setNewMaterial({ name: '', quantity: '1', unit_cost: '', unit: '', vendor: '' });
   }
 
+  async function updateJobStatus(newStatus: string) {
+    if (!jobId) return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setJob(prev => prev ? { ...prev, status: newStatus } : null);
+      } else {
+        alert('Failed to update status: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      alert('Failed to update status: ' + (err.message || 'Unknown error'));
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -487,11 +506,26 @@ export default function JobDetailPage() {
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{job.name}</h1>
-            <p className="text-gray-600 text-sm mt-1">
-              {job.client_name && <span>Client: {job.client_name} · </span>}
-              {job.industry_name && <span>Industry: {job.industry_name} · </span>}
-              <span className="capitalize">Status: {job.status || 'active'}</span>
-            </p>
+            <div className="flex items-center gap-3 mt-1">
+              {job.client_name && <span className="text-gray-600 text-sm">Client: {job.client_name}</span>}
+              {job.industry_name && <span className="text-gray-600 text-sm">· Industry: {job.industry_name}</span>}
+              <span className="text-gray-600 text-sm">·</span>
+              <select
+                value={job.status || 'active'}
+                onChange={(e) => updateJobStatus(e.target.value)}
+                className={`text-sm font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${
+                  job.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  job.status === 'on-hold' ? 'bg-yellow-100 text-yellow-800' :
+                  job.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}
+              >
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="on-hold">On Hold</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
           <Link href="/jobs" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
             ← Back to Jobs
