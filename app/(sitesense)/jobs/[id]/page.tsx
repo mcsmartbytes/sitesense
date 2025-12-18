@@ -470,6 +470,24 @@ export default function JobDetailPage() {
     }
   }
 
+  async function updatePhaseStatus(phaseId: string, newStatus: Phase['status']) {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/phases`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: phaseId, status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPhases(prev => prev.map(p => p.id === phaseId ? { ...p, status: newStatus } : p));
+      } else {
+        alert('Failed to update phase: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      alert('Failed to update phase: ' + (err.message || 'Unknown error'));
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -709,13 +727,20 @@ export default function JobDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-gray-900">{p.name}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        p.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        p.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                        p.status === 'blocked' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {p.status}
-                      </span>
+                      <select
+                        value={p.status}
+                        onChange={(e) => updatePhaseStatus(p.id, e.target.value as Phase['status'])}
+                        className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${
+                          p.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          p.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                          p.status === 'blocked' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        <option value="planned">Planned</option>
+                        <option value="active">Active</option>
+                        <option value="blocked">Blocked</option>
+                        <option value="completed">Completed</option>
+                      </select>
                     </div>
                     <button onClick={() => { setAddingTaskForPhase(p.id); setNewTaskTitle(''); }} className="text-sm text-blue-600 hover:text-blue-700">+ Add Task</button>
                   </div>
