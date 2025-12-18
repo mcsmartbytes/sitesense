@@ -119,6 +119,9 @@ export async function POST() {
         checkout_notes TEXT,
         checkout_condition TEXT,
         checkout_location TEXT,
+        expected_return_date TEXT,
+        reminder_date TEXT,
+        reminder_sent INTEGER DEFAULT 0,
         checked_in_at TEXT,
         checkin_notes TEXT,
         checkin_condition TEXT,
@@ -195,6 +198,39 @@ export async function POST() {
         last_contacted TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Crew Members (subcontractors, employees, crews)
+      `CREATE TABLE IF NOT EXISTS crew_members (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT,
+        type TEXT DEFAULT 'employee',
+        email TEXT,
+        phone TEXT,
+        hourly_rate REAL,
+        specialty TEXT,
+        license_number TEXT,
+        insurance_expiry TEXT,
+        status TEXT DEFAULT 'active',
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Crew Assignments (assign crew to jobs/phases)
+      `CREATE TABLE IF NOT EXISTS crew_assignments (
+        id TEXT PRIMARY KEY,
+        crew_member_id TEXT NOT NULL,
+        job_id TEXT NOT NULL,
+        phase_id TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        scheduled_hours REAL,
+        status TEXT DEFAULT 'scheduled',
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
       )`,
 
       // Expense Categories
@@ -514,6 +550,10 @@ export async function POST() {
       `CREATE INDEX IF NOT EXISTS idx_job_tasks_phase_id ON job_tasks(phase_id)`,
       `CREATE INDEX IF NOT EXISTS idx_job_materials_job_id ON job_materials(job_id)`,
       `CREATE INDEX IF NOT EXISTS idx_job_materials_user_id ON job_materials(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_crew_members_user_id ON crew_members(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_crew_assignments_crew_member_id ON crew_assignments(crew_member_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_crew_assignments_job_id ON crew_assignments(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_tool_checkouts_job_id ON tool_checkouts(checked_out_to_job_id)`,
     ];
 
     // Execute each statement
@@ -548,6 +588,10 @@ export async function POST() {
       `ALTER TABLE estimate_items ADD COLUMN unit TEXT`,
       // Add is_optional to estimate_items
       `ALTER TABLE estimate_items ADD COLUMN is_optional INTEGER DEFAULT 0`,
+      // Add reminder fields to tool_checkouts
+      `ALTER TABLE tool_checkouts ADD COLUMN expected_return_date TEXT`,
+      `ALTER TABLE tool_checkouts ADD COLUMN reminder_date TEXT`,
+      `ALTER TABLE tool_checkouts ADD COLUMN reminder_sent INTEGER DEFAULT 0`,
     ];
 
     for (const sql of migrations) {

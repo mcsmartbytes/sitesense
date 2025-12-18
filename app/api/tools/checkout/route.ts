@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
       checked_out_to_job_id,
       checkout_notes,
       checkout_location,
+      expected_return_date,
+      reminder_date,
     } = body;
 
     if (!tool_id || !user_id) {
@@ -107,8 +109,9 @@ export async function POST(request: NextRequest) {
     await execute(
       `INSERT INTO tool_checkouts (
         id, tool_id, user_id, checked_out_at, checked_out_to,
-        checked_out_to_job_id, checkout_notes, checkout_condition, checkout_location, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        checked_out_to_job_id, checkout_notes, checkout_condition, checkout_location,
+        expected_return_date, reminder_date, reminder_sent, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
       [
         id,
         tool_id,
@@ -119,6 +122,8 @@ export async function POST(request: NextRequest) {
         checkout_notes || null,
         tool.condition,
         checkout_location || null,
+        expected_return_date || null,
+        reminder_date || null,
         now,
       ]
     );

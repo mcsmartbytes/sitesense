@@ -1,8 +1,316 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Quick Utilities Component
+function QuickUtilities({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [activeUtil, setActiveUtil] = useState<'calc' | 'calendar' | 'converter' | 'timer' | null>(null);
+  const [calcDisplay, setCalcDisplay] = useState('0');
+  const [calcPrev, setCalcPrev] = useState<number | null>(null);
+  const [calcOp, setCalcOp] = useState<string | null>(null);
+  const [calcNewNum, setCalcNewNum] = useState(true);
+
+  // Timer state
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Converter state
+  const [convertValue, setConvertValue] = useState('');
+  const [convertType, setConvertType] = useState<'length' | 'area' | 'weight'>('length');
+  const [convertFrom, setConvertFrom] = useState('ft');
+  const [convertTo, setConvertTo] = useState('m');
+
+  // Stable timer callback
+  const tick = useCallback(() => {
+    setTimerSeconds(s => s + 1);
+  }, []);
+
+  useEffect(() => {
+    if (timerRunning) {
+      timerRef.current = setInterval(tick, 1000);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [timerRunning, tick]);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onClose]);
+
+  // Calculator functions
+  const handleCalcNum = (num: string) => {
+    if (calcNewNum) {
+      setCalcDisplay(num);
+      setCalcNewNum(false);
+    } else {
+      setCalcDisplay(calcDisplay === '0' ? num : calcDisplay + num);
+    }
+  };
+
+  const handleCalcOp = (op: string) => {
+    setCalcPrev(parseFloat(calcDisplay));
+    setCalcOp(op);
+    setCalcNewNum(true);
+  };
+
+  const handleCalcEquals = () => {
+    if (calcPrev === null || !calcOp) return;
+    const curr = parseFloat(calcDisplay);
+    let result = 0;
+    switch (calcOp) {
+      case '+': result = calcPrev + curr; break;
+      case '-': result = calcPrev - curr; break;
+      case '×': result = calcPrev * curr; break;
+      case '÷': result = curr !== 0 ? calcPrev / curr : 0; break;
+    }
+    setCalcDisplay(String(parseFloat(result.toFixed(8))));
+    setCalcPrev(null);
+    setCalcOp(null);
+    setCalcNewNum(true);
+  };
+
+  const handleCalcClear = () => {
+    setCalcDisplay('0');
+    setCalcPrev(null);
+    setCalcOp(null);
+    setCalcNewNum(true);
+  };
+
+  // Unit converter
+  const conversionRates: Record<string, Record<string, number>> = {
+    length: { ft: 1, m: 0.3048, in: 12, cm: 30.48, yd: 0.333333 },
+    area: { sqft: 1, sqm: 0.092903, sqyd: 0.111111, acre: 0.0000229568 },
+    weight: { lb: 1, kg: 0.453592, oz: 16, ton: 0.0005 },
+  };
+
+  const getConvertedValue = () => {
+    if (!convertValue) return '';
+    const num = parseFloat(convertValue);
+    if (isNaN(num)) return '';
+    const rates = conversionRates[convertType];
+    const inBase = num / rates[convertFrom];
+    const result = inBase * rates[convertTo];
+    return result.toFixed(4);
+  };
+
+  const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div ref={dropdownRef} className="absolute right-0 top-full mt-2 w-72 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
+      {/* Utility tabs */}
+      <div className="flex border-b bg-gray-50">
+        {[
+          { id: 'calc', icon: '🔢', label: 'Calc' },
+          { id: 'calendar', icon: '📅', label: 'Cal' },
+          { id: 'converter', icon: '📏', label: 'Conv' },
+          { id: 'timer', icon: '⏱️', label: 'Timer' },
+        ].map(util => (
+          <button
+            key={util.id}
+            onClick={() => setActiveUtil(activeUtil === util.id ? null : util.id as any)}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${
+              activeUtil === util.id
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <span className="block">{util.icon}</span>
+            {util.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Calculator */}
+      {activeUtil === 'calc' && (
+        <div className="p-3">
+          <div className="bg-gray-900 text-white text-right p-3 rounded-lg mb-2 text-xl font-mono">
+            {calcDisplay}
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {['C','±','%','÷','7','8','9','×','4','5','6','-','1','2','3','+','0','.','='].map((btn, idx) => (
+              <button
+                key={btn}
+                onClick={() => {
+                  if (btn === 'C') handleCalcClear();
+                  else if (btn === '=') handleCalcEquals();
+                  else if (['+','-','×','÷'].includes(btn)) handleCalcOp(btn);
+                  else if (btn === '±') setCalcDisplay(d => String(-parseFloat(d)));
+                  else if (btn === '%') setCalcDisplay(d => String(parseFloat(d) / 100));
+                  else if (btn === '.') {
+                    if (!calcDisplay.includes('.')) setCalcDisplay(d => d + '.');
+                  }
+                  else handleCalcNum(btn);
+                }}
+                className={`${btn === '0' ? 'col-span-2' : ''} p-2 text-sm font-medium rounded ${
+                  ['+','-','×','÷'].includes(btn) ? 'bg-blue-500 text-white hover:bg-blue-600' :
+                  btn === 'C' ? 'bg-red-500 text-white hover:bg-red-600' :
+                  btn === '=' ? 'bg-green-500 text-white hover:bg-green-600' :
+                  ['±','%'].includes(btn) ? 'bg-gray-300 hover:bg-gray-400 text-gray-800' :
+                  'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                }`}
+              >
+                {btn}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Calendar */}
+      {activeUtil === 'calendar' && (
+        <div className="p-3">
+          <div className="text-center mb-2">
+            <p className="text-lg font-semibold text-gray-900">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
+            </p>
+            <p className="text-3xl font-bold text-blue-600">
+              {new Date().getDate()}
+            </p>
+            <p className="text-sm text-gray-600">
+              {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-xs text-center">
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <div key={i} className="font-medium text-gray-500 py-1">{d}</div>
+            ))}
+            {(() => {
+              const today = new Date();
+              const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+              const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+              const days = [];
+              for (let i = 0; i < firstDay.getDay(); i++) {
+                days.push(<div key={`empty-${i}`} className="py-1" />);
+              }
+              for (let d = 1; d <= lastDay.getDate(); d++) {
+                const isToday = d === today.getDate();
+                days.push(
+                  <div
+                    key={d}
+                    className={`py-1 rounded ${isToday ? 'bg-blue-600 text-white font-bold' : 'text-gray-700'}`}
+                  >
+                    {d}
+                  </div>
+                );
+              }
+              return days;
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Unit Converter */}
+      {activeUtil === 'converter' && (
+        <div className="p-3 space-y-3">
+          <select
+            value={convertType}
+            onChange={(e) => {
+              setConvertType(e.target.value as any);
+              const units = Object.keys(conversionRates[e.target.value]);
+              setConvertFrom(units[0]);
+              setConvertTo(units[1]);
+            }}
+            className="w-full px-2 py-1 border rounded text-sm"
+          >
+            <option value="length">Length</option>
+            <option value="area">Area</option>
+            <option value="weight">Weight</option>
+          </select>
+          <div className="flex gap-2 items-center">
+            <input
+              type="number"
+              value={convertValue}
+              onChange={(e) => setConvertValue(e.target.value)}
+              placeholder="Value"
+              className="flex-1 px-2 py-1 border rounded text-sm"
+            />
+            <select
+              value={convertFrom}
+              onChange={(e) => setConvertFrom(e.target.value)}
+              className="px-2 py-1 border rounded text-sm"
+            >
+              {Object.keys(conversionRates[convertType]).map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+          <div className="text-center text-gray-400">↓</div>
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 px-2 py-1 bg-gray-100 rounded text-sm font-mono">
+              {getConvertedValue() || '—'}
+            </div>
+            <select
+              value={convertTo}
+              onChange={(e) => setConvertTo(e.target.value)}
+              className="px-2 py-1 border rounded text-sm"
+            >
+              {Object.keys(conversionRates[convertType]).map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Stopwatch/Timer */}
+      {activeUtil === 'timer' && (
+        <div className="p-3 text-center">
+          <div className="text-4xl font-mono font-bold text-gray-900 mb-4">
+            {formatTime(timerSeconds)}
+          </div>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => setTimerRunning(!timerRunning)}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                timerRunning
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'bg-green-500 text-white hover:bg-green-600'
+              }`}
+            >
+              {timerRunning ? 'Stop' : 'Start'}
+            </button>
+            <button
+              onClick={() => { setTimerSeconds(0); setTimerRunning(false); }}
+              className="px-4 py-2 bg-gray-200 rounded-lg font-medium hover:bg-gray-300"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Default - show all options */}
+      {!activeUtil && (
+        <div className="p-3 text-center text-sm text-gray-500">
+          Select a utility above
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Variant = 'expenses' | 'sitesense';
 
@@ -82,6 +390,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showUtilities, setShowUtilities] = useState(false);
   const isExpense = variant === 'expenses';
 
   const handleLogout = async () => {
@@ -112,6 +421,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
     { href: '/jobs', label: 'Jobs', description: 'Manage projects & clients' },
     { href: '/estimates', label: 'Estimates', description: 'Create & send bids' },
     { href: '/time-tracking', label: 'Time Tracking', description: 'Log hours worked' },
+    { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules' },
   ];
 
   const financialItems: DropdownItem[] = [
@@ -221,8 +531,24 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
           )}
         </div>
 
-        {/* Right side: user menu */}
+        {/* Right side: utilities + user menu */}
         <div className="relative hidden md:flex items-center gap-3">
+          {/* Quick Utilities Button */}
+          {!isExpense && (
+            <div className="relative">
+              <button
+                onClick={() => setShowUtilities(!showUtilities)}
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                title="Quick Utilities"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </button>
+              <QuickUtilities isOpen={showUtilities} onClose={() => setShowUtilities(false)} />
+            </div>
+          )}
+
           {user ? (
             <>
               <span className="hidden sm:inline text-[11px] text-slate-300">
@@ -297,6 +623,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
                   <Link href="/jobs" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Jobs</Link>
                   <Link href="/estimates" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Estimates</Link>
                   <Link href="/time-tracking" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Time Tracking</Link>
+                  <Link href="/crew" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Team & Crew</Link>
                 </div>
 
                 <Link href="/contacts" className="block py-2 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Contacts</Link>

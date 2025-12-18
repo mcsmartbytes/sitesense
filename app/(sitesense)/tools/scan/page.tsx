@@ -36,6 +36,8 @@ type Checkout = {
   checked_out_to: string | null;
   checkout_notes: string | null;
   checkout_location: string | null;
+  expected_return_date: string | null;
+  reminder_date: string | null;
   jobs: { id: string; name: string } | null;
 };
 
@@ -74,6 +76,8 @@ function ToolScanPageContent() {
   const [checkoutJobId, setCheckoutJobId] = useState('');
   const [checkoutLocation, setCheckoutLocation] = useState('');
   const [checkoutNotes, setCheckoutNotes] = useState('');
+  const [expectedReturnDate, setExpectedReturnDate] = useState('');
+  const [reminderDate, setReminderDate] = useState('');
 
   // Checkin form
   const [checkinLocation, setCheckinLocation] = useState('');
@@ -209,6 +213,8 @@ function ToolScanPageContent() {
           checked_out_to_job_id: checkoutJobId || null,
           checkout_location: checkoutLocation.trim() || null,
           checkout_notes: checkoutNotes.trim() || null,
+          expected_return_date: expectedReturnDate || null,
+          reminder_date: reminderDate || null,
         }),
       });
 
@@ -223,6 +229,8 @@ function ToolScanPageContent() {
         setCheckoutJobId('');
         setCheckoutLocation('');
         setCheckoutNotes('');
+        setExpectedReturnDate('');
+        setReminderDate('');
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to check out tool' });
       }
@@ -411,11 +419,22 @@ function ToolScanPageContent() {
               {activeCheckout && (
                 <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                   <p className="text-sm font-medium text-blue-800 mb-2">Currently Checked Out</p>
-                  <div className="text-sm text-blue-700">
+                  <div className="text-sm text-blue-700 space-y-1">
                     <p>To: {activeCheckout.checked_out_to || 'Unknown'}</p>
                     {activeCheckout.jobs && <p>Job: {activeCheckout.jobs.name}</p>}
                     <p>Since: {new Date(activeCheckout.checked_out_at).toLocaleString()}</p>
                     {activeCheckout.checkout_location && <p>Location: {activeCheckout.checkout_location}</p>}
+                    {activeCheckout.expected_return_date && (
+                      <p className={`font-medium ${new Date(activeCheckout.expected_return_date) < new Date() ? 'text-red-600' : ''}`}>
+                        Expected Return: {new Date(activeCheckout.expected_return_date).toLocaleDateString()}
+                        {new Date(activeCheckout.expected_return_date) < new Date() && ' (OVERDUE)'}
+                      </p>
+                    )}
+                    {activeCheckout.reminder_date && (
+                      <p className="text-xs text-blue-600">
+                        Reminder: {new Date(activeCheckout.reminder_date).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -459,6 +478,34 @@ function ToolScanPageContent() {
                       className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                       placeholder="Where is the tool going?"
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Expected Return</label>
+                      <input
+                        type="date"
+                        value={expectedReturnDate}
+                        onChange={(e) => {
+                          setExpectedReturnDate(e.target.value);
+                          // Auto-set reminder to 1 day before if not already set
+                          if (e.target.value && !reminderDate) {
+                            const returnDate = new Date(e.target.value);
+                            returnDate.setDate(returnDate.getDate() - 1);
+                            setReminderDate(returnDate.toISOString().split('T')[0]);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Reminder Date</label>
+                      <input
+                        type="date"
+                        value={reminderDate}
+                        onChange={(e) => setReminderDate(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Notes</label>

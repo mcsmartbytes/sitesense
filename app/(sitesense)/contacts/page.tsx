@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import EmailComposeModal from '@/components/EmailComposeModal';
 
 type Contact = {
   id: string;
@@ -62,6 +63,10 @@ function ContactsPageContent() {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   // Form fields
+  // Email modal state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState('');
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
@@ -573,9 +578,23 @@ function ContactsPageContent() {
                   {selectedContact.email && (
                     <div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
-                      <a href={`mailto:${selectedContact.email}`} className="text-blue-600 hover:underline">
-                        {selectedContact.email}
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a href={`mailto:${selectedContact.email}`} className="text-blue-600 hover:underline">
+                          {selectedContact.email}
+                        </a>
+                        <button
+                          onClick={() => {
+                            setEmailRecipient(selectedContact.email!);
+                            setShowEmailModal(true);
+                          }}
+                          className="p-1 text-gray-400 hover:text-blue-600"
+                          title="Compose email"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -655,6 +674,15 @@ function ContactsPageContent() {
             )}
           </div>
         </div>
+
+        {/* Email Compose Modal */}
+        <EmailComposeModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          initialTo={emailRecipient}
+          fromName={user?.company_name || user?.full_name || undefined}
+          replyTo={user?.email || undefined}
+        />
       </main>
     </div>
   );
