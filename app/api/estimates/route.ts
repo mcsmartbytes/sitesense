@@ -71,7 +71,32 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, job_id, contact_id, status, total, notes, valid_until, po_number } = body;
+    const {
+      user_id,
+      job_id,
+      contact_id,
+      status,
+      title,
+      client_name,
+      client_email,
+      client_phone,
+      client_address,
+      project_address,
+      estimate_date,
+      valid_until,
+      po_number,
+      payment_terms,
+      scope_of_work,
+      notes,
+      terms_and_conditions,
+      subtotal,
+      discount_type,
+      discount_value,
+      discount_amount,
+      tax_rate,
+      tax_amount,
+      total,
+    } = body;
 
     if (!user_id) {
       return NextResponse.json(
@@ -87,8 +112,13 @@ export async function POST(request: NextRequest) {
     await client.execute({
       sql: `
         INSERT INTO estimates (
-          id, user_id, job_id, contact_id, status, total, notes, valid_until, public_token, po_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, user_id, job_id, contact_id, status, title,
+          client_name, client_email, client_phone, client_address, project_address,
+          estimate_date, valid_until, po_number, payment_terms,
+          scope_of_work, notes, terms_and_conditions,
+          subtotal, discount_type, discount_value, discount_amount,
+          tax_rate, tax_amount, total, public_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: [
         id,
@@ -96,11 +126,27 @@ export async function POST(request: NextRequest) {
         job_id || null,
         contact_id || null,
         status || 'draft',
-        total || 0,
-        notes || null,
+        title || null,
+        client_name || null,
+        client_email || null,
+        client_phone || null,
+        client_address || null,
+        project_address || null,
+        estimate_date || null,
         valid_until || null,
-        publicToken,
         po_number || null,
+        payment_terms || null,
+        scope_of_work || null,
+        notes || null,
+        terms_and_conditions || null,
+        subtotal || 0,
+        discount_type || 'percent',
+        discount_value || 0,
+        discount_amount || 0,
+        tax_rate || 0,
+        tax_amount || 0,
+        total || 0,
+        publicToken,
       ],
     });
 
@@ -122,6 +168,7 @@ export async function POST(request: NextRequest) {
       job_id: row.job_id,
       contact_id: row.contact_id,
       status: row.status,
+      title: row.title,
       total: Number(row.total),
       notes: row.notes,
       valid_until: row.valid_until,

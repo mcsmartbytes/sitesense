@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
         FROM receipts r
         LEFT JOIN expenses e ON r.expense_id = e.id
         LEFT JOIN categories c ON e.category_id = c.id
-        WHERE e.user_id = ?
-        ORDER BY r.uploaded_at DESC
+        WHERE r.user_id = ?
+        ORDER BY r.created_at DESC
       `,
       args: [userId],
     });
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       expense_id: row.expense_id,
       file_url: row.file_url,
       file_name: row.file_name,
-      uploaded_at: row.uploaded_at,
+      created_at: row.created_at,
       expenses: row.expense_id ? {
         id: row.expense_id,
         description: row.description,

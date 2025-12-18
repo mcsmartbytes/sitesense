@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       args.push(jobId);
     }
 
-    sql += ' ORDER BY t.entry_date DESC';
+    sql += ' ORDER BY t.date DESC';
 
     const result = await client.execute({ sql, args });
 
@@ -38,9 +38,10 @@ export async function GET(request: NextRequest) {
       id: row.id,
       user_id: row.user_id,
       job_id: row.job_id,
-      entry_date: row.entry_date,
+      date: row.date,
       hours: Number(row.hours),
       hourly_rate: row.hourly_rate !== null ? Number(row.hourly_rate) : null,
+      description: row.description,
       notes: row.notes,
       created_at: row.created_at,
       jobs: row.job_name ? { name: row.job_name } : null,
@@ -60,11 +61,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, job_id, entry_date, hours, hourly_rate, notes } = body;
+    const { user_id, job_id, date, hours, hourly_rate, description, notes } = body;
 
-    if (!user_id || !entry_date || hours === undefined) {
+    if (!user_id || !date || hours === undefined) {
       return NextResponse.json(
-        { success: false, error: 'user_id, entry_date, and hours are required' },
+        { success: false, error: 'user_id, date, and hours are required' },
         { status: 400 }
       );
     }
@@ -74,16 +75,17 @@ export async function POST(request: NextRequest) {
 
     await client.execute({
       sql: `
-        INSERT INTO time_entries (id, user_id, job_id, entry_date, hours, hourly_rate, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO time_entries (id, user_id, job_id, date, hours, hourly_rate, description, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: [
         id,
         user_id,
         job_id || null,
-        entry_date,
+        date,
         hours,
         hourly_rate || null,
+        description || null,
         notes || null,
       ],
     });
@@ -104,9 +106,10 @@ export async function POST(request: NextRequest) {
       id: row.id,
       user_id: row.user_id,
       job_id: row.job_id,
-      entry_date: row.entry_date,
+      date: row.date,
       hours: Number(row.hours),
       hourly_rate: row.hourly_rate !== null ? Number(row.hourly_rate) : null,
+      description: row.description,
       notes: row.notes,
       created_at: row.created_at,
       jobs: row.job_name ? { name: row.job_name } : null,
@@ -137,7 +140,7 @@ export async function PUT(request: NextRequest) {
 
     const client = getTurso();
 
-    const allowedFields = ['job_id', 'entry_date', 'hours', 'hourly_rate', 'notes'];
+    const allowedFields = ['job_id', 'date', 'hours', 'hourly_rate', 'description', 'notes'];
     const fields: string[] = [];
     const values: (string | number | null)[] = [];
 
@@ -179,9 +182,10 @@ export async function PUT(request: NextRequest) {
       id: row.id,
       user_id: row.user_id,
       job_id: row.job_id,
-      entry_date: row.entry_date,
+      date: row.date,
       hours: Number(row.hours),
       hourly_rate: row.hourly_rate !== null ? Number(row.hourly_rate) : null,
+      description: row.description,
       notes: row.notes,
       created_at: row.created_at,
       jobs: row.job_name ? { name: row.job_name } : null,

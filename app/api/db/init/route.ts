@@ -219,6 +219,7 @@ export async function POST() {
         date TEXT NOT NULL,
         vendor TEXT,
         is_business INTEGER DEFAULT 1,
+        payment_method TEXT,
         receipt_url TEXT,
         job_id TEXT,
         notes TEXT,
@@ -272,18 +273,27 @@ export async function POST() {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         job_id TEXT,
+        contact_id TEXT,
+        title TEXT,
         po_number TEXT,
         client_name TEXT,
         client_email TEXT,
         client_phone TEXT,
         client_address TEXT,
+        project_address TEXT,
+        estimate_date TEXT,
+        payment_terms TEXT,
+        scope_of_work TEXT,
         status TEXT DEFAULT 'draft',
         subtotal REAL DEFAULT 0,
+        discount_type TEXT DEFAULT 'percent',
+        discount_value REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
         tax_rate REAL DEFAULT 0,
         tax_amount REAL DEFAULT 0,
         total REAL DEFAULT 0,
         notes TEXT,
-        terms TEXT,
+        terms_and_conditions TEXT,
         valid_until TEXT,
         public_token TEXT UNIQUE,
         sent_at TEXT,
@@ -302,6 +312,7 @@ export async function POST() {
         unit TEXT,
         unit_price REAL DEFAULT 0,
         total REAL DEFAULT 0,
+        is_optional INTEGER DEFAULT 0,
         sort_order INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
       )`,
@@ -335,6 +346,78 @@ export async function POST() {
         file_type TEXT,
         ocr_data TEXT,
         created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Job Permits
+      `CREATE TABLE IF NOT EXISTS permits (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        permit_type TEXT,
+        permit_number TEXT,
+        authority TEXT,
+        status TEXT DEFAULT 'pending',
+        applied_date TEXT,
+        approved_date TEXT,
+        expires_date TEXT,
+        inspection_date TEXT,
+        fee REAL,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Job Phases (user's job-specific phases)
+      `CREATE TABLE IF NOT EXISTS job_phases (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        sort_order INTEGER DEFAULT 0,
+        start_date TEXT,
+        end_date TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Job Tasks
+      `CREATE TABLE IF NOT EXISTS job_tasks (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        phase_id TEXT,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'pending',
+        priority TEXT DEFAULT 'medium',
+        assigned_to TEXT,
+        due_date TEXT,
+        completed_at TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Job Materials
+      `CREATE TABLE IF NOT EXISTS job_materials (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        quantity REAL DEFAULT 1,
+        unit TEXT,
+        unit_cost REAL,
+        total_cost REAL,
+        vendor TEXT,
+        status TEXT DEFAULT 'needed',
+        ordered_date TEXT,
+        received_date TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
       )`,
 
       // Industry Phases (for seeding)
@@ -422,6 +505,15 @@ export async function POST() {
       `CREATE INDEX IF NOT EXISTS idx_industry_fields_industry_id ON industry_fields(industry_id)`,
       `CREATE INDEX IF NOT EXISTS idx_user_phases_user_id ON user_phases(user_id)`,
       `CREATE INDEX IF NOT EXISTS idx_user_fields_user_id ON user_fields(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_permits_job_id ON permits(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_permits_user_id ON permits(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_phases_job_id ON job_phases(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_phases_user_id ON job_phases(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_tasks_job_id ON job_tasks(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_tasks_user_id ON job_tasks(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_tasks_phase_id ON job_tasks(phase_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_materials_job_id ON job_materials(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_job_materials_user_id ON job_materials(user_id)`,
     ];
 
     // Execute each statement
@@ -435,6 +527,27 @@ export async function POST() {
       `ALTER TABLE users ADD COLUMN password_hash TEXT`,
       `ALTER TABLE users ADD COLUMN company_name TEXT`,
       `ALTER TABLE users ADD COLUMN industry_id TEXT`,
+      // Add payment_method to expenses
+      `ALTER TABLE expenses ADD COLUMN payment_method TEXT`,
+      // Add contact_id to estimates
+      `ALTER TABLE estimates ADD COLUMN contact_id TEXT`,
+      // Add authority and inspection_date to permits
+      `ALTER TABLE permits ADD COLUMN authority TEXT`,
+      `ALTER TABLE permits ADD COLUMN inspection_date TEXT`,
+      // Add new estimate fields
+      `ALTER TABLE estimates ADD COLUMN title TEXT`,
+      `ALTER TABLE estimates ADD COLUMN project_address TEXT`,
+      `ALTER TABLE estimates ADD COLUMN estimate_date TEXT`,
+      `ALTER TABLE estimates ADD COLUMN payment_terms TEXT`,
+      `ALTER TABLE estimates ADD COLUMN scope_of_work TEXT`,
+      `ALTER TABLE estimates ADD COLUMN terms_and_conditions TEXT`,
+      `ALTER TABLE estimates ADD COLUMN discount_type TEXT DEFAULT 'percent'`,
+      `ALTER TABLE estimates ADD COLUMN discount_value REAL DEFAULT 0`,
+      `ALTER TABLE estimates ADD COLUMN discount_amount REAL DEFAULT 0`,
+      // Add unit to estimate_items
+      `ALTER TABLE estimate_items ADD COLUMN unit TEXT`,
+      // Add is_optional to estimate_items
+      `ALTER TABLE estimate_items ADD COLUMN is_optional INTEGER DEFAULT 0`,
     ];
 
     for (const sql of migrations) {

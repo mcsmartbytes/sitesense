@@ -38,7 +38,7 @@ type Expense = {
 
 type TimeEntry = {
   id: string;
-  entry_date: string;
+  date: string;
   hours: number;
   hourly_rate: number | null;
   notes: string | null;
@@ -97,7 +97,7 @@ export default function JobDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [newTime, setNewTime] = useState({
-    entry_date: new Date().toISOString().split('T')[0],
+    date: new Date().toISOString().split('T')[0],
     hours: '',
     hourly_rate: '',
     notes: '',
@@ -107,8 +107,12 @@ export default function JobDetailPage() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskEdit, setTaskEdit] = useState<{ assignee: string; due_date: string }>({ assignee: '', due_date: '' });
-  const [newPermit, setNewPermit] = useState({ permit_number: '', authority: '', inspection_date: '' });
-  const [newMaterial, setNewMaterial] = useState({ name: '', quantity: '1', unit: '', unit_cost: '', vendor: '' });
+  const [newPermit, setNewPermit] = useState({ permit_number: '', authority: '', status: 'applied', inspection_date: '' });
+  const [editingPermitId, setEditingPermitId] = useState<string | null>(null);
+  const [newMaterial, setNewMaterial] = useState({ name: '', quantity: '1', unit_cost: '', unit: '', vendor: '' });
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
+  const [showAddPhase, setShowAddPhase] = useState(false);
+  const [newPhaseName, setNewPhaseName] = useState('');
 
   useEffect(() => {
     if (!jobId || !user?.id) return;
@@ -203,7 +207,7 @@ export default function JobDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: user.id,
-          entry_date: newTime.entry_date,
+          date: newTime.date,
           hours,
           hourly_rate: hourlyRate,
           notes: newTime.notes || null,
@@ -214,7 +218,7 @@ export default function JobDetailPage() {
       if (!data.success) throw new Error(data.error);
 
       setNewTime({
-        entry_date: newTime.entry_date,
+        date: newTime.date,
         hours: '',
         hourly_rate: '',
         notes: '',
@@ -259,6 +263,29 @@ export default function JobDetailPage() {
     }
   }
 
+  async function addPhase() {
+    if (!newPhaseName.trim() || !user?.id) return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/phases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          name: newPhaseName.trim(),
+          status: 'planned',
+          sort_order: phases.length,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setNewPhaseName('');
+      setShowAddPhase(false);
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to add phase: ' + (err.message || 'Unknown error'));
+    }
+  }
+
   async function saveTaskEdit(taskId: string) {
     try {
       const res = await fetch(`/api/jobs/${jobId}/tasks`, {
@@ -281,21 +308,22 @@ export default function JobDetailPage() {
   }
 
   async function addPermit() {
-    if (!jobId) return;
+    if (!jobId || !user?.id) return;
     try {
       const res = await fetch(`/api/jobs/${jobId}/permits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: user.id,
           permit_number: newPermit.permit_number || null,
           authority: newPermit.authority || null,
-          status: 'applied',
+          status: newPermit.status || 'applied',
           inspection_date: newPermit.inspection_date || null,
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      setNewPermit({ permit_number: '', authority: '', inspection_date: '' });
+      setNewPermit({ permit_number: '', authority: '', status: 'applied', inspection_date: '' });
       await loadData();
     } catch (err: any) {
       alert('Failed to add permit: ' + (err.message || 'Unknown error'));
@@ -312,13 +340,48 @@ export default function JobDetailPage() {
     }
   }
 
+  function startEditPermit(p: Permit) {
+    setEditingPermitId(p.id);
+    setNewPermit({
+      permit_number: p.permit_number || '',
+      authority: p.authority || '',
+      status: p.status || 'applied',
+      inspection_date: p.inspection_date || '',
+    });
+  }
+
+  async function savePermitEdit() {
+    if (!editingPermitId) return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/permits`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingPermitId,
+          permit_number: newPermit.permit_number || null,
+          authority: newPermit.authority || null,
+          status: newPermit.status,
+          inspection_date: newPermit.inspection_date || null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setEditingPermitId(null);
+      setNewPermit({ permit_number: '', authority: '', status: 'applied', inspection_date: '' });
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to update permit: ' + (err.message || 'Unknown error'));
+    }
+  }
+
   async function addMaterial() {
-    if (!jobId || !newMaterial.name.trim()) return;
+    if (!jobId || !user?.id || !newMaterial.name.trim()) return;
     try {
       const res = await fetch(`/api/jobs/${jobId}/materials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: user.id,
           name: newMaterial.name.trim(),
           quantity: newMaterial.quantity ? Number(newMaterial.quantity) : 1,
           unit: newMaterial.unit || null,
@@ -328,7 +391,7 @@ export default function JobDetailPage() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      setNewMaterial({ name: '', quantity: '1', unit: '', unit_cost: '', vendor: '' });
+      setNewMaterial({ name: '', quantity: '1', unit_cost: '', unit: '', vendor: '' });
       await loadData();
     } catch (err: any) {
       alert('Failed to add material: ' + (err.message || 'Unknown error'));
@@ -343,6 +406,49 @@ export default function JobDetailPage() {
     } catch (err) {
       console.error('Failed to delete material:', err);
     }
+  }
+
+  function startEditMaterial(m: Material) {
+    setEditingMaterialId(m.id);
+    setNewMaterial({
+      name: m.name,
+      quantity: m.quantity.toString(),
+      unit_cost: m.unit_cost?.toString() || '',
+      unit: m.unit || '',
+      vendor: m.vendor || '',
+    });
+  }
+
+  async function saveMaterialEdit() {
+    if (!editingMaterialId) return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/materials`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingMaterialId,
+          name: newMaterial.name.trim(),
+          quantity: newMaterial.quantity ? Number(newMaterial.quantity) : 1,
+          unit_cost: newMaterial.unit_cost ? Number(newMaterial.unit_cost) : null,
+          unit: newMaterial.unit || null,
+          vendor: newMaterial.vendor || null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setEditingMaterialId(null);
+      setNewMaterial({ name: '', quantity: '1', unit_cost: '', unit: '', vendor: '' });
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to update material: ' + (err.message || 'Unknown error'));
+    }
+  }
+
+  function cancelEdit() {
+    setEditingPermitId(null);
+    setEditingMaterialId(null);
+    setNewPermit({ permit_number: '', authority: '', status: 'applied', inspection_date: '' });
+    setNewMaterial({ name: '', quantity: '1', unit_cost: '', unit: '', vendor: '' });
   }
 
   if (loading) {
@@ -465,7 +571,7 @@ export default function JobDetailPage() {
             <form onSubmit={handleAddTimeEntry} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium mb-1">Date</label>
-                <input type="date" value={newTime.entry_date} onChange={(e) => setNewTime((prev) => ({ ...prev, entry_date: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={newTime.date} onChange={(e) => setNewTime((prev) => ({ ...prev, date: e.target.value }))} className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -499,7 +605,7 @@ export default function JobDetailPage() {
                 {timeEntries.map((t) => (
                   <div key={t.id} className="py-1 border-b last:border-b-0">
                     <div className="flex justify-between">
-                      <span>{new Date(t.entry_date).toLocaleDateString()}</span>
+                      <span>{new Date(t.date).toLocaleDateString()}</span>
                       <span>{t.hours.toFixed(2)} hrs</span>
                     </div>
                     {t.hourly_rate && (
@@ -525,11 +631,44 @@ export default function JobDetailPage() {
               <h2 className="font-semibold text-gray-900">Project Phases</h2>
               <p className="text-xs text-gray-500">Track progress from intake to closeout.</p>
             </div>
+            <button
+              onClick={() => setShowAddPhase(true)}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              + Add Phase
+            </button>
           </div>
 
-          {phases.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">No phases yet. Phases will appear when configured.</div>
-          ) : (
+          {showAddPhase && (
+            <div className="p-4 border-b bg-gray-50">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newPhaseName}
+                  onChange={(e) => setNewPhaseName(e.target.value)}
+                  placeholder="Phase name (e.g., Planning, Execution, Review)"
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => e.key === 'Enter' && addPhase()}
+                />
+                <button
+                  onClick={addPhase}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => { setShowAddPhase(false); setNewPhaseName(''); }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {phases.length === 0 && !showAddPhase ? (
+            <div className="p-6 text-sm text-gray-500">No phases yet. Click "+ Add Phase" to get started.</div>
+          ) : phases.length > 0 ? (
             <div className="divide-y">
               {phases.map((p) => (
                 <div key={p.id} className="p-4">
@@ -588,7 +727,7 @@ export default function JobDetailPage() {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </section>
 
         {/* Permits */}
@@ -597,11 +736,25 @@ export default function JobDetailPage() {
             <h2 className="font-semibold text-gray-900">Permits</h2>
           </div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
               <input placeholder="Permit Number" value={newPermit.permit_number} onChange={(e) => setNewPermit({ ...newPermit, permit_number: e.target.value })} className="px-3 py-2 border rounded" />
               <input placeholder="Authority" value={newPermit.authority} onChange={(e) => setNewPermit({ ...newPermit, authority: e.target.value })} className="px-3 py-2 border rounded" />
+              <select value={newPermit.status} onChange={(e) => setNewPermit({ ...newPermit, status: e.target.value })} className="px-3 py-2 border rounded">
+                <option value="draft">Draft</option>
+                <option value="applied">Applied</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="closed">Closed</option>
+              </select>
               <input type="date" value={newPermit.inspection_date} onChange={(e) => setNewPermit({ ...newPermit, inspection_date: e.target.value })} className="px-3 py-2 border rounded" title="Inspection Date" />
-              <button onClick={addPermit} className="px-3 py-2 bg-blue-600 text-white rounded">Add Permit</button>
+              {editingPermitId ? (
+                <>
+                  <button onClick={savePermitEdit} className="px-3 py-2 bg-green-600 text-white rounded">Save</button>
+                  <button onClick={cancelEdit} className="px-3 py-2 bg-gray-300 text-gray-700 rounded">Cancel</button>
+                </>
+              ) : (
+                <button onClick={addPermit} className="px-3 py-2 bg-blue-600 text-white rounded md:col-span-2">Add Permit</button>
+              )}
             </div>
 
             {permits.length === 0 ? (
@@ -626,6 +779,7 @@ export default function JobDetailPage() {
                         <td className="px-3 py-2 capitalize">{p.status}</td>
                         <td className="px-3 py-2">{p.inspection_date ? new Date(p.inspection_date).toLocaleDateString() : '—'}</td>
                         <td className="px-3 py-2 text-right">
+                          <button onClick={() => startEditPermit(p)} className="text-blue-600 hover:text-blue-700 mr-3">Edit</button>
                           <button onClick={() => deletePermit(p.id)} className="text-red-600 hover:text-red-700">Delete</button>
                         </td>
                       </tr>
@@ -643,12 +797,20 @@ export default function JobDetailPage() {
             <h2 className="font-semibold text-gray-900">Materials / BOM</h2>
           </div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
               <input placeholder="Material name" value={newMaterial.name} onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })} className="px-3 py-2 border rounded md:col-span-2" />
               <input type="number" min="0" step="0.01" placeholder="Qty" value={newMaterial.quantity} onChange={(e) => setNewMaterial({ ...newMaterial, quantity: e.target.value })} className="px-3 py-2 border rounded" />
-              <input placeholder="Unit (e.g., sq, roll)" value={newMaterial.unit} onChange={(e) => setNewMaterial({ ...newMaterial, unit: e.target.value })} className="px-3 py-2 border rounded" />
               <input type="number" step="0.01" min="0" placeholder="Unit Cost" value={newMaterial.unit_cost} onChange={(e) => setNewMaterial({ ...newMaterial, unit_cost: e.target.value })} className="px-3 py-2 border rounded" />
-              <button onClick={addMaterial} className="px-3 py-2 bg-blue-600 text-white rounded">Add</button>
+              <input placeholder="Unit (e.g., sq, roll)" value={newMaterial.unit} onChange={(e) => setNewMaterial({ ...newMaterial, unit: e.target.value })} className="px-3 py-2 border rounded" />
+              <input placeholder="Vendor" value={newMaterial.vendor} onChange={(e) => setNewMaterial({ ...newMaterial, vendor: e.target.value })} className="px-3 py-2 border rounded" />
+              {editingMaterialId ? (
+                <div className="flex gap-2">
+                  <button onClick={saveMaterialEdit} className="px-3 py-2 bg-green-600 text-white rounded">Save</button>
+                  <button onClick={cancelEdit} className="px-3 py-2 bg-gray-300 text-gray-700 rounded">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={addMaterial} className="px-3 py-2 bg-blue-600 text-white rounded">Add</button>
+              )}
             </div>
 
             {materials.length === 0 ? (
@@ -660,8 +822,8 @@ export default function JobDetailPage() {
                     <tr>
                       <th className="px-3 py-2 text-left">Name</th>
                       <th className="px-3 py-2 text-left">Qty</th>
-                      <th className="px-3 py-2 text-left">Unit</th>
                       <th className="px-3 py-2 text-left">Unit Cost</th>
+                      <th className="px-3 py-2 text-left">Unit</th>
                       <th className="px-3 py-2 text-left">Vendor</th>
                       <th className="px-3 py-2 text-right">Actions</th>
                     </tr>
@@ -671,10 +833,11 @@ export default function JobDetailPage() {
                       <tr key={m.id} className="border-t">
                         <td className="px-3 py-2">{m.name}</td>
                         <td className="px-3 py-2">{m.quantity}</td>
-                        <td className="px-3 py-2">{m.unit || '—'}</td>
                         <td className="px-3 py-2">{m.unit_cost !== null ? `$${m.unit_cost.toFixed(2)}` : '—'}</td>
+                        <td className="px-3 py-2">{m.unit || '—'}</td>
                         <td className="px-3 py-2">{m.vendor || '—'}</td>
                         <td className="px-3 py-2 text-right">
+                          <button onClick={() => startEditMaterial(m)} className="text-blue-600 hover:text-blue-700 mr-3">Edit</button>
                           <button onClick={() => deleteMaterial(m.id)} className="text-red-600 hover:text-red-700">Delete</button>
                         </td>
                       </tr>

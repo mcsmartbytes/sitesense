@@ -10,7 +10,7 @@ type Receipt = {
   expense_id: string;
   file_url: string;
   file_name: string | null;
-  uploaded_at: string;
+  created_at: string;
   expenses: {
     id: string;
     description: string;
@@ -78,7 +78,7 @@ export default function ReceiptsPage() {
       id: r.id,
       url: r.file_url,
       fileName: r.file_name || 'Receipt',
-      date: r.expenses?.date || r.uploaded_at,
+      date: r.expenses?.date || r.created_at,
       description: r.expenses?.description || 'Receipt',
       amount: r.expenses?.amount || 0,
       vendor: r.expenses?.vendor || null,

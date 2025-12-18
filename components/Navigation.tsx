@@ -115,10 +115,11 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
   ];
 
   const financialItems: DropdownItem[] = [
+    { href: '/expenses', label: 'Expenses', description: 'Track all expenses' },
+    { href: '/receipts', label: 'Receipts', description: 'Receipt gallery & OCR' },
     { href: '/mileage', label: 'Mileage', description: 'Track business trips' },
     { href: '/budgets', label: 'Budgets', description: 'Set spending limits' },
     { href: '/recurring', label: 'Recurring', description: 'Recurring expenses' },
-    { href: '/receipts', label: 'Receipts', description: 'Receipt gallery & OCR' },
   ];
 
   return (

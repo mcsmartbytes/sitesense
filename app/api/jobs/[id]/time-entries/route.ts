@@ -15,7 +15,7 @@ export async function GET(
       sql: `
         SELECT * FROM time_entries
         WHERE job_id = ?
-        ORDER BY entry_date DESC
+        ORDER BY date DESC
       `,
       args: [jobId],
     });
@@ -47,11 +47,11 @@ export async function POST(
   try {
     const { id: jobId } = await params;
     const body = await request.json();
-    const { user_id, entry_date, hours, hourly_rate, notes } = body;
+    const { user_id, date, hours, hourly_rate, description, notes } = body;
 
-    if (!user_id || !entry_date || !hours) {
+    if (!user_id || !date || !hours) {
       return NextResponse.json(
-        { success: false, error: 'user_id, entry_date, and hours are required' },
+        { success: false, error: 'user_id, date, and hours are required' },
         { status: 400 }
       );
     }
@@ -61,15 +61,15 @@ export async function POST(
 
     await client.execute({
       sql: `
-        INSERT INTO time_entries (id, user_id, job_id, entry_date, hours, hourly_rate, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO time_entries (id, user_id, job_id, date, hours, hourly_rate, description, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      args: [id, user_id, jobId, entry_date, hours, hourly_rate || null, notes || null],
+      args: [id, user_id, jobId, date, hours, hourly_rate || null, description || null, notes || null],
     });
 
     return NextResponse.json({
       success: true,
-      data: { id, user_id, job_id: jobId, entry_date, hours, hourly_rate, notes },
+      data: { id, user_id, job_id: jobId, date, hours, hourly_rate, description, notes },
     });
   } catch (error: any) {
     console.error('Error creating time entry:', error);

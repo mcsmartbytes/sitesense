@@ -7,9 +7,10 @@ import Navigation from '@/components/Navigation';
 
 type TimeRow = {
   id: string;
-  entry_date: string;
+  date: string;
   hours: number;
   hourly_rate: number | null;
+  description: string | null;
   notes: string | null;
   job_id: string | null;
   jobs: { name: string } | null;
@@ -83,7 +84,7 @@ export default function TimeTrackingPage() {
 
   function handleEdit(entry: TimeRow) {
     setEditingId(entry.id);
-    setEntryDate(entry.entry_date);
+    setEntryDate(entry.date);
     setHours(entry.hours.toString());
     setHourlyRate(entry.hourly_rate?.toString() || '');
     setNotes(entry.notes || '');
@@ -98,7 +99,7 @@ export default function TimeTrackingPage() {
     try {
       const payload = {
         user_id: user.id,
-        entry_date: entryDate,
+        date: entryDate,
         hours: parseFloat(hours),
         hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
         notes: notes.trim() || null,
@@ -303,7 +304,7 @@ export default function TimeTrackingPage() {
                     className={`border-t ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}
                   >
                     <td className="px-4 py-2">
-                      {new Date(r.entry_date).toLocaleDateString()}
+                      {new Date(r.date).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">
                       {r.job_id ? (
