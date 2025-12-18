@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 
 type TimeRow = {
@@ -15,46 +15,133 @@ type TimeRow = {
   jobs: { name: string } | null;
 };
 
+type Job = {
+  id: string;
+  name: string;
+};
+
 export default function TimeTrackingPage() {
+  const { user } = useAuth();
   const [rows, setRows] = useState<TimeRow[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form state
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [hours, setHours] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [jobId, setJobId] = useState('');
 
   useEffect(() => {
-    void loadTime();
-  }, []);
+    if (user?.id) {
+      void loadData();
+    }
+  }, [user?.id]);
 
-  async function loadTime() {
+  async function loadData() {
+    if (!user?.id) return;
+
     setLoading(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setRows([]);
-        setLoading(false);
-        return;
+      // Load jobs for dropdown
+      const jobsRes = await fetch(`/api/jobs?user_id=${user.id}`);
+      const jobsData = await jobsRes.json();
+      if (jobsData.success) {
+        setJobs(jobsData.data || []);
       }
 
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select('id, entry_date, hours, hourly_rate, notes, job_id, jobs(name)')
-        .eq('user_id', user.id)
-        .order('entry_date', { ascending: false });
+      // Load time entries
+      const res = await fetch(`/api/time-entries?user_id=${user.id}`);
+      const data = await res.json();
 
-      if (error) throw error;
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load time entries');
+      }
 
-      setRows(
-        (data || []).map((t: any) => ({
-          ...t,
-          hours: Number(t.hours),
-          hourly_rate: t.hourly_rate !== null ? Number(t.hourly_rate) : null,
-        }))
-      );
-    } catch (err) {
+      setRows(data.data || []);
+    } catch (err: any) {
       console.error('Error loading time entries:', err);
+      setError(err.message || 'Failed to load time entries');
     } finally {
       setLoading(false);
+    }
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setEntryDate(new Date().toISOString().split('T')[0]);
+    setHours('');
+    setHourlyRate('');
+    setNotes('');
+    setJobId('');
+    setShowForm(false);
+  }
+
+  function handleEdit(entry: TimeRow) {
+    setEditingId(entry.id);
+    setEntryDate(entry.entry_date);
+    setHours(entry.hours.toString());
+    setHourlyRate(entry.hourly_rate?.toString() || '');
+    setNotes(entry.notes || '');
+    setJobId(entry.job_id || '');
+    setShowForm(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user?.id || !hours) return;
+
+    try {
+      const payload = {
+        user_id: user.id,
+        entry_date: entryDate,
+        hours: parseFloat(hours),
+        hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
+        notes: notes.trim() || null,
+        job_id: jobId || null,
+      };
+
+      if (editingId) {
+        const res = await fetch('/api/time-entries', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingId, ...payload }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+      } else {
+        const res = await fetch('/api/time-entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+      }
+
+      resetForm();
+      await loadData();
+    } catch (err: any) {
+      console.error('Error saving time entry:', err);
+      setError(err.message || 'Failed to save time entry');
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this time entry?')) return;
+
+    try {
+      const res = await fetch(`/api/time-entries?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      await loadData();
+    } catch (err: any) {
+      console.error('Error deleting time entry:', err);
+      setError(err.message || 'Failed to delete');
     }
   }
 
@@ -67,9 +154,9 @@ export default function TimeTrackingPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navigation variant="sitesense" />
+        <Navigation />
         <div className="flex items-center justify-center py-24">
-          <p className="text-gray-600">Loading time entries…</p>
+          <p className="text-gray-600">Loading time entries...</p>
         </div>
       </div>
     );
@@ -77,7 +164,7 @@ export default function TimeTrackingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation variant="sitesense" />
+      <Navigation />
       <main className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -88,14 +175,112 @@ export default function TimeTrackingPage() {
               <span className="font-semibold">${totalLaborCost.toFixed(2)}</span>
             </p>
           </div>
-          <Link href="/jobs" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
-            ← Back to Jobs
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+            >
+              + Log Time
+            </button>
+            <Link href="/jobs" className="text-sm text-blue-600 hover:text-blue-700 font-semibold self-center">
+              Jobs
+            </Link>
+          </div>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+            <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          </div>
+        )}
+
+        {/* Add/Edit Form */}
+        {showForm && (
+          <section className="bg-white rounded-lg shadow p-5 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              {editingId ? 'Edit Time Entry' : 'Log Time'}
+            </h2>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={entryDate}
+                  onChange={(e) => setEntryDate(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Hours *</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Hourly Rate</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="$/hour"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Job (optional)</label>
+                <select
+                  value={jobId}
+                  onChange={(e) => setJobId(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">No job</option>
+                  {jobs.map(j => (
+                    <option key={j.id} value={j.id}>{j.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Notes</label>
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="What did you work on?"
+                />
+              </div>
+              <div className="md:col-span-3 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                >
+                  {editingId ? 'Update' : 'Log Time'}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
 
         {rows.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-sm text-gray-500">
-            No time entries yet. Add time from a Job Detail page.
+            No time entries yet. Log your first entry to start tracking hours.
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-x-auto">
@@ -106,7 +291,9 @@ export default function TimeTrackingPage() {
                   <th className="px-4 py-2 text-left text-gray-600 font-medium">Job</th>
                   <th className="px-4 py-2 text-left text-gray-600 font-medium">Hours</th>
                   <th className="px-4 py-2 text-left text-gray-600 font-medium">Rate</th>
+                  <th className="px-4 py-2 text-left text-gray-600 font-medium">Cost</th>
                   <th className="px-4 py-2 text-left text-gray-600 font-medium">Notes</th>
+                  <th className="px-4 py-2 text-right text-gray-600 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,8 +321,25 @@ export default function TimeTrackingPage() {
                     <td className="px-4 py-2">
                       {r.hourly_rate !== null ? `$${r.hourly_rate.toFixed(2)}` : '—'}
                     </td>
+                    <td className="px-4 py-2 font-medium text-green-600">
+                      {r.hourly_rate !== null ? `$${(r.hours * r.hourly_rate).toFixed(2)}` : '—'}
+                    </td>
                     <td className="px-4 py-2">
                       {r.notes ? <span className="line-clamp-2">{r.notes}</span> : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        onClick={() => handleEdit(r)}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

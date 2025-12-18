@@ -3,26 +3,38 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
 import Navigation from '@/components/Navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Item = { id: string; description: string; qty: string; unit_price: string; is_optional: boolean };
 
 export default function NewEstimatePage() {
   const { jobId } = useParams<{ jobId: string }>();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [jobName, setJobName] = useState('');
   const [items, setItems] = useState<Item[]>([{ id: crypto.randomUUID(), description: '', qty: '1', unit_price: '0', is_optional: false }]);
   const [notes, setNotes] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [poNumber, setPoNumber] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { void loadJob(); }, [jobId]);
+  useEffect(() => {
+    if (!authLoading && user) {
+      void loadJob();
+    }
+  }, [jobId, authLoading, user]);
+
   async function loadJob() {
-    const { data } = await supabase.from('jobs').select('name').eq('id', jobId).single();
-    if (data?.name) setJobName(data.name);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const data = await res.json();
+      if (data.success && data.data?.name) {
+        setJobName(data.data.name);
+      }
+    } catch (error) {
+      console.error('Error loading job:', error);
+    }
   }
 
   const totals = useMemo(() => {
@@ -37,43 +49,69 @@ export default function NewEstimatePage() {
   function removeItem(id: string) { setItems(prev => prev.filter(i => i.id !== id)); }
 
   async function handleSave() {
+    if (!user) {
+      alert('Please sign in');
+      return;
+    }
+
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { alert('Please sign in'); return; }
+      // Create estimate
+      const estimateRes = await fetch('/api/estimates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: jobId,
+          user_id: user.id,
+          status: 'draft',
+          notes: notes || null,
+          valid_until: expiresAt || null,
+          subtotal: totals.subtotal,
+          tax_amount: totals.tax,
+          total: totals.total,
+          po_number: poNumber || null
+        })
+      });
 
-      const { data: estData, error: estErr } = await supabase
-        .from('estimates')
-        .insert({ job_id: jobId, user_id: user.id, status: 'draft', notes: notes || null, expires_at: expiresAt || null, subtotal: totals.subtotal, tax: totals.tax, total: totals.total, po_number: poNumber || null })
-        .select('id, public_token')
-        .single();
-      if (estErr) throw estErr;
+      const estimateData = await estimateRes.json();
+      if (!estimateData.success) throw new Error(estimateData.error);
 
-      const estimateId = estData.id as string;
+      const estimateId = estimateData.data.id;
 
+      // Create items
       if (items.length > 0) {
-        const rows = items.map((it, idx) => ({ estimate_id: estimateId, description: it.description, qty: parseFloat(it.qty || '0'), unit_price: parseFloat(it.unit_price || '0'), is_optional: it.is_optional, sort_order: idx }));
-        const { error } = await supabase.from('estimate_items').insert(rows);
-        if (error) throw error;
-      }
+        const itemsToCreate = items.map((it, idx) => ({
+          estimate_id: estimateId,
+          description: it.description,
+          quantity: parseFloat(it.qty || '0'),
+          unit_price: parseFloat(it.unit_price || '0'),
+          is_optional: it.is_optional,
+          sort_order: idx
+        }));
 
-      if (attachments.length > 0) {
-        const toInsert: { estimate_id: string; url: string; kind: 'photo' }[] = [];
-        for (const file of attachments) {
-          const path = `${estimateId}/${Date.now()}_${file.name}`;
-          const { error: upErr } = await supabase.storage.from('estimate-attachments').upload(path, file, { upsert: false });
-          if (upErr) throw upErr;
-          const { data } = supabase.storage.from('estimate-attachments').getPublicUrl(path);
-          toInsert.push({ estimate_id: estimateId, url: data.publicUrl, kind: 'photo' });
-        }
-        const { error } = await supabase.from('estimate_attachments').insert(toInsert as any);
-        if (error) throw error;
+        const itemsRes = await fetch(`/api/estimates/${estimateId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: itemsToCreate })
+        });
+
+        const itemsData = await itemsRes.json();
+        if (!itemsData.success) throw new Error(itemsData.error);
       }
 
       router.push(`/estimates/${estimateId}`);
     } catch (err: any) {
       alert('Failed to save estimate: ' + (err.message || 'Unknown error'));
     } finally { setSaving(false); }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation variant="sitesense" />
+        <div className="flex items-center justify-center py-24"><p className="text-gray-600">Loading...</p></div>
+      </div>
+    );
   }
 
   return (
@@ -85,7 +123,7 @@ export default function NewEstimatePage() {
             <h1 className="text-3xl font-bold text-gray-900">New Estimate</h1>
             <p className="text-sm text-gray-600">Job: {jobName || jobId}</p>
           </div>
-          <Link href={`/jobs/${jobId}`} className="text-blue-600 hover:text-blue-700">← Back to Job</Link>
+          <Link href={`/jobs/${jobId}`} className="text-blue-600 hover:text-blue-700">Back to Job</Link>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6 space-y-6">
@@ -124,19 +162,13 @@ export default function NewEstimatePage() {
             </div>
           </div>
 
-          <div>
-            <h2 className="font-semibold text-gray-900 mb-2">Attachments</h2>
-            <input type="file" multiple accept="image/*" onChange={(e) => setAttachments(Array.from(e.target.files || []))} />
-            <p className="text-xs text-gray-500 mt-1">Uploads go to the 'estimate-attachments' storage bucket.</p>
-          </div>
-
           <div className="flex justify-end gap-4 items-center border-t pt-4">
             <div className="text-right text-sm text-gray-700">
               <div>Subtotal: <span className="font-semibold">${totals.subtotal.toFixed(2)}</span></div>
               <div>Tax: <span className="font-semibold">${totals.tax.toFixed(2)}</span></div>
               <div>Total: <span className="font-bold text-gray-900">${totals.total.toFixed(2)}</span></div>
             </div>
-            <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50">{saving ? 'Saving…' : 'Save Estimate'}</button>
+            <button onClick={handleSave} disabled={saving} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50">{saving ? 'Saving...' : 'Save Estimate'}</button>
           </div>
         </div>
       </main>

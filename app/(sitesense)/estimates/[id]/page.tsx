@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
 import Navigation from '@/components/Navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Estimate = { id: string; job_id: string; notes: string | null; status: string; subtotal: number; tax: number; total: number; public_token: string; po_number: string | null };
 type Item = { id: string; description: string; qty: number; unit_price: number; is_optional: boolean };
@@ -12,7 +12,7 @@ type Attachment = { id: string; url: string; kind: string };
 
 export default function EstimateDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -23,24 +23,58 @@ export default function EstimateDetailPage() {
   const [sending, setSending] = useState(false);
   const publicUrl = useMemo(() => estimate ? `${location.origin}/estimates/public/${estimate.public_token}` : '', [estimate]);
 
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    if (!authLoading && user) {
+      void load();
+    }
+  }, [id, authLoading, user]);
+
   async function load() {
     setLoading(true);
     try {
-      const { data: est } = await supabase.from('estimates').select('id, job_id, notes, status, subtotal, tax, total, public_token, po_number').eq('id', id).single();
-      if (est) setEstimate({ ...est, subtotal: Number(est.subtotal), tax: Number(est.tax), total: Number(est.total), po_number: est.po_number || null });
-      const { data: its } = await supabase.from('estimate_items').select('id, description, qty, unit_price, is_optional').eq('estimate_id', id).order('sort_order');
-      setItems((its || []).map((i: any) => ({ ...i, qty: Number(i.qty), unit_price: Number(i.unit_price) })) as Item[]);
-      const { data: atts } = await supabase.from('estimate_attachments').select('id, url, kind').eq('estimate_id', id).order('created_at', { ascending: false });
-      setAttachments((atts || []) as Attachment[]);
-    } finally { setLoading(false); }
+      // Fetch estimate
+      const estRes = await fetch(`/api/estimates/${id}`);
+      const estData = await estRes.json();
+      if (estData.success && estData.data) {
+        const est = estData.data;
+        setEstimate({
+          ...est,
+          subtotal: Number(est.subtotal),
+          tax: Number(est.tax_amount || est.tax || 0),
+          total: Number(est.total),
+          po_number: est.po_number || null
+        });
+      }
+
+      // Fetch items
+      const itemsRes = await fetch(`/api/estimates/${id}/items`);
+      const itemsData = await itemsRes.json();
+      if (itemsData.success && itemsData.data) {
+        setItems(itemsData.data.map((i: any) => ({
+          ...i,
+          qty: Number(i.quantity || i.qty),
+          unit_price: Number(i.unit_price)
+        })));
+      }
+
+      // Fetch attachments
+      const attsRes = await fetch(`/api/estimates/${id}/attachments`);
+      const attsData = await attsRes.json();
+      if (attsData.success && attsData.data) {
+        setAttachments(attsData.data);
+      }
+    } catch (error) {
+      console.error('Error loading estimate:', error);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation variant="sitesense" />
-        <div className="flex items-center justify-center py-24"><p className="text-gray-600">Loading estimate…</p></div>
+        <div className="flex items-center justify-center py-24"><p className="text-gray-600">Loading estimate...</p></div>
       </div>
     );
   }
@@ -74,7 +108,7 @@ export default function EstimateDetailPage() {
             <div>
               <a href={`/api/estimates/${estimate.id}/pdf`} target="_blank" className="inline-block mt-2 px-3 py-2 bg-gray-700 text-white rounded">Download PDF</a>
             </div>
-            <div><Link href={`/jobs/${estimate.job_id}`} className="text-blue-600 hover:text-blue-700 text-sm">← Back to Job</Link></div>
+            <div><Link href={`/jobs/${estimate.job_id}`} className="text-blue-600 hover:text-blue-700 text-sm">Back to Job</Link></div>
           </div>
         </div>
 
@@ -179,7 +213,7 @@ export default function EstimateDetailPage() {
                   }
                 }}
                 className={`px-3 py-2 rounded text-white ${sending || !toEmail ? 'bg-emerald-400' : 'bg-emerald-600 hover:bg-emerald-700'}`}
-              >{sending ? 'Sending…' : 'Send'}</button>
+              >{sending ? 'Sending...' : 'Send'}</button>
             </div>
           </div>
         </div>

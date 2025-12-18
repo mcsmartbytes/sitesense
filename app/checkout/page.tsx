@@ -1,35 +1,24 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: checkingAuth } = useAuth();
   const plan = searchParams.get('plan') || 'premium';
   const interval = searchParams.get('interval') || 'month';
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    checkUser();
-  }, []);
-
-  async function checkUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    setCheckingAuth(false);
-  }
 
   const handleCheckout = async () => {
     if (!user) {
-      router.push(`/auth/login?redirect=/checkout?plan=${plan}&interval=${interval}`);
+      router.push(`/login?redirect=/checkout?plan=${plan}&interval=${interval}`);
       return;
     }
 
@@ -118,8 +107,8 @@ function CheckoutContent() {
         {!user && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-yellow-800">
-              Please <Link href={`/auth/login?redirect=/checkout?plan=${plan}&interval=${interval}`} className="font-semibold underline">sign in</Link> or{' '}
-              <Link href="/auth/signup" className="font-semibold underline">create an account</Link> to continue.
+              Please <Link href={`/login?redirect=/checkout?plan=${plan}&interval=${interval}`} className="font-semibold underline">sign in</Link> or{' '}
+              <Link href="/register" className="font-semibold underline">create an account</Link> to continue.
             </p>
           </div>
         )}
@@ -143,12 +132,12 @@ function CheckoutContent() {
         </p>
 
         <div className="mt-6 pt-6 border-t border-gray-200 flex justify-between">
-          <Link href="/pricing" className="text-sm text-gray-600 hover:text-gray-700">
-            ← Back to Pricing
+          <Link href="/" className="text-sm text-gray-600 hover:text-gray-700">
+            Back
           </Link>
           {interval === 'month' && (
             <Link href={`/checkout?plan=${plan}&interval=year`} className="text-sm text-blue-600 hover:text-blue-700">
-              Save 33% with yearly →
+              Save 33% with yearly
             </Link>
           )}
         </div>

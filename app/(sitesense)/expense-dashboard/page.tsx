@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Navigation from '@/components/Navigation';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Job = {
   id: string;
@@ -19,20 +19,21 @@ type Expense = {
   description: string;
   date: string;
   job_id: string | null;
-  jobs: { name: string } | null;
+  job_name: string | null;
 };
 
 type TimeEntry = {
   id: string;
-  entry_date: string;
+  date: string;
   hours: number;
   hourly_rate: number | null;
-  notes: string | null;
+  description: string | null;
   job_id: string | null;
-  jobs: { name: string } | null;
+  job_name: string | null;
 };
 
 export default function ExpenseDashboardPage() {
+  const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -40,75 +41,45 @@ export default function ExpenseDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    if (!authLoading && user) {
+      void loadData();
+    } else if (!authLoading && !user) {
+      setLoading(false);
+      setError('Please sign in to view your SiteSense dashboard.');
+    }
+  }, [authLoading, user]);
 
   async function loadData() {
     setLoading(true);
     setError(null);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError('Please sign in to view your SiteSense dashboard.');
-        setLoading(false);
-        return;
+      // Fetch jobs
+      const jobsRes = await fetch(`/api/jobs?user_id=${user!.id}`);
+      const jobsData = await jobsRes.json();
+      if (jobsData.success) {
+        setJobs(jobsData.data || []);
       }
 
-      // Jobs (we're not filtering by user_id because jobs currently may not have it)
-      const { data: jobsData, error: jobsError } = await supabase
-        .from('jobs')
-        .select('id, name, client_name, status, created_at')
-        .order('created_at', { ascending: false });
-
-      if (jobsError) throw jobsError;
-      setJobs(jobsData || []);
-
-      // Expenses (linked to jobs where possible)
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select(
-          `
-          id,
-          amount,
-          description,
-          date,
-          job_id,
-          jobs(name)
-        `
-        )
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(20);
-
-      if (expensesError) throw expensesError;
-
-      setExpenses(
-        (expensesData || []).map((e: any) => ({
+      // Fetch expenses
+      const expensesRes = await fetch(`/api/expenses?user_id=${user!.id}&limit=20`);
+      const expensesData = await expensesRes.json();
+      if (expensesData.success) {
+        setExpenses((expensesData.data || []).map((e: any) => ({
           ...e,
           amount: Number(e.amount),
-        }))
-      );
+        })));
+      }
 
-      // Time entries (per user)
-      const { data: timeData, error: timeError } = await supabase
-        .from('time_entries')
-        .select('id, entry_date, hours, hourly_rate, notes, job_id, jobs(name)')
-        .eq('user_id', user.id)
-        .order('entry_date', { ascending: false })
-        .limit(20);
-
-      if (timeError) throw timeError;
-
-      setTimeEntries(
-        (timeData || []).map((t: any) => ({
+      // Fetch time entries
+      const timeRes = await fetch(`/api/time-entries?user_id=${user!.id}&limit=20`);
+      const timeData = await timeRes.json();
+      if (timeData.success) {
+        setTimeEntries((timeData.data || []).map((t: any) => ({
           ...t,
           hours: Number(t.hours),
           hourly_rate: t.hourly_rate !== null ? Number(t.hourly_rate) : null,
-        }))
-      );
+        })));
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to load dashboard data.');
@@ -129,11 +100,11 @@ export default function ExpenseDashboardPage() {
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const hoursThisWeek = timeEntries
-    .filter((t) => new Date(t.entry_date) >= startOfWeek)
+    .filter((t) => new Date(t.date) >= startOfWeek)
     .reduce((sum, t) => sum + t.hours, 0);
 
   const laborThisMonth = timeEntries
-    .filter((t) => new Date(t.entry_date) >= startOfMonth)
+    .filter((t) => new Date(t.date) >= startOfMonth)
     .reduce((sum, t) => {
       if (!t.hourly_rate) return sum;
       return sum + t.hours * t.hourly_rate;
@@ -150,12 +121,12 @@ export default function ExpenseDashboardPage() {
   const recentTimeEntries = timeEntries.slice(0, 5);
 
   // ---- UI ----
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <Navigation variant="sitesense" />
         <div className="flex items-center justify-center py-24">
-          <p className="text-slate-300 text-sm">Loading your SiteSense dashboard…</p>
+          <p className="text-slate-300 text-sm">Loading your SiteSense dashboard...</p>
         </div>
       </div>
     );
@@ -168,7 +139,7 @@ export default function ExpenseDashboardPage() {
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <p className="text-red-300 text-sm">{error}</p>
           <Link
-            href="/auth/login"
+            href="/login"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"
           >
             Sign in
@@ -197,22 +168,13 @@ export default function ExpenseDashboardPage() {
                 href="/jobs"
                 className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold shadow-sm flex items-center gap-2 text-sm"
               >
-                <span className="text-lg">🧱</span>
                 View Jobs
               </Link>
               <Link
-                href="/expenses/new"
-                className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold shadow-sm flex items-center gap-2 text-sm"
-              >
-                <span className="text-lg">➕</span>
-                Add Expense
-              </Link>
-              <Link
-                href="/jobs"
+                href="/time-tracking"
                 className="px-5 py-2.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition font-semibold shadow-sm flex items-center gap-2 text-sm"
               >
-                <span className="text-lg">⏱️</span>
-                Log Time (via Job)
+                Log Time
               </Link>
             </div>
           </div>
@@ -243,7 +205,7 @@ export default function ExpenseDashboardPage() {
               ${totalJobCostThisMonth.toFixed(2)}
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              ${expensesThisMonth.toFixed(2)} expenses · ${laborThisMonth.toFixed(2)} labor
+              ${expensesThisMonth.toFixed(2)} expenses + ${laborThisMonth.toFixed(2)} labor
             </p>
           </div>
 
@@ -271,7 +233,7 @@ export default function ExpenseDashboardPage() {
                 href="/jobs"
                 className="text-xs font-semibold text-blue-300 hover:text-blue-200"
               >
-                View all jobs →
+                View all jobs
               </Link>
             </div>
 
@@ -307,7 +269,7 @@ export default function ExpenseDashboardPage() {
                   </thead>
                   <tbody>
                     {recentJobs.map((job, idx) => {
-                      // Rough per-job monthly cost: sum expenses + labor for this job this month
+                      // Rough per-job monthly cost
                       const jobExpenses = expenses.filter(
                         (e) =>
                           e.job_id === job.id &&
@@ -316,7 +278,7 @@ export default function ExpenseDashboardPage() {
                       const jobTime = timeEntries.filter(
                         (t) =>
                           t.job_id === job.id &&
-                          new Date(t.entry_date) >= startOfMonth
+                          new Date(t.date) >= startOfMonth
                       );
                       const jobExpenseTotal = jobExpenses.reduce(
                         (sum, e) => sum + e.amount,
@@ -339,7 +301,7 @@ export default function ExpenseDashboardPage() {
                             {job.name}
                           </td>
                           <td className="px-4 py-2 text-slate-200">
-                            {job.client_name || '—'}
+                            {job.client_name || '-'}
                           </td>
                           <td className="px-4 py-2">
                             <span
@@ -362,7 +324,7 @@ export default function ExpenseDashboardPage() {
                               href={`/jobs/${job.id}`}
                               className="text-xs font-semibold text-blue-300 hover:text-blue-200"
                             >
-                              View details →
+                              View details
                             </Link>
                           </td>
                         </tr>
@@ -386,7 +348,7 @@ export default function ExpenseDashboardPage() {
                   href="/time-tracking"
                   className="text-xs text-blue-400 hover:text-blue-300"
                 >
-                  View all →
+                  View all
                 </Link>
               </div>
               {recentTimeEntries.length === 0 ? (
@@ -399,17 +361,17 @@ export default function ExpenseDashboardPage() {
                     <li key={t.id} className="px-4 py-2.5 flex justify-between gap-2">
                       <div>
                         <p className="font-medium text-slate-100">
-                          {t.jobs?.name || 'Unassigned job'}
+                          {t.job_name || 'Unassigned job'}
                         </p>
                         <p className="text-slate-300">
-                          {new Date(t.entry_date).toLocaleDateString()} ·{' '}
+                          {new Date(t.date).toLocaleDateString()} - {' '}
                           {t.hours.toFixed(2)} hrs
                           {t.hourly_rate &&
                             ` @ $${t.hourly_rate.toFixed(2)}/hr`}
                         </p>
-                        {t.notes && (
+                        {t.description && (
                           <p className="text-slate-300/90 line-clamp-2">
-                            {t.notes}
+                            {t.description}
                           </p>
                         )}
                       </div>
@@ -425,12 +387,6 @@ export default function ExpenseDashboardPage() {
                 <h2 className="font-semibold text-white text-sm">
                   Recent Expenses
                 </h2>
-                <Link
-                  href="/expenses"
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  View all →
-                </Link>
               </div>
               {recentExpenses.length === 0 ? (
                 <div className="p-4 text-xs text-slate-300">
@@ -448,13 +404,13 @@ export default function ExpenseDashboardPage() {
                         <p className="font-medium text-slate-100">
                           ${e.amount.toFixed(2)}{' '}
                           <span className="text-slate-300 font-normal">
-                            · {e.description}
+                            - {e.description}
                           </span>
                         </p>
                         <p className="text-slate-300">
                           {new Date(e.date).toLocaleDateString()}
-                          {e.jobs?.name &&
-                            ` · Job: ${e.jobs.name}`}
+                          {e.job_name &&
+                            ` - Job: ${e.job_name}`}
                         </p>
                       </div>
                     </li>

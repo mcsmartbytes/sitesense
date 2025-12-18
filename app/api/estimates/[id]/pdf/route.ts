@@ -1,81 +1,75 @@
 import { NextRequest } from 'next/server';
-import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { getTurso } from '@/lib/turso';
 import { estimateToPdfBytes } from '@/lib/estimatePdf';
-
-type EstimateRecord = {
-  id: string;
-  user_id: string | null;
-  created_at: string;
-  subtotal: number | string;
-  tax: number | string;
-  total: number | string;
-  po_number: string | null;
-  jobs: { name: string } | { name: string }[] | null;
-};
-
-type EstimateItemRecord = {
-  description: string;
-  qty: number | string;
-  unit_price: number | string;
-  is_optional: boolean;
-};
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const client = getTurso();
     const { id } = await context.params;
-    const { data: estRaw, error: estErr } = await supabaseAdmin
-      .from('estimates')
-      .select('id, user_id, created_at, subtotal, tax, total, po_number, jobs(name)')
-      .eq('id', id)
-      .single();
-    const est = estRaw as EstimateRecord | null;
-    if (estErr || !est) {
+
+    // Get estimate with job info
+    const estResult = await client.execute({
+      sql: `
+        SELECT e.*, j.name as job_name
+        FROM estimates e
+        LEFT JOIN jobs j ON e.job_id = j.id
+        WHERE e.id = ?
+      `,
+      args: [id],
+    });
+
+    const est = estResult.rows[0];
+    if (!est) {
       return new Response(JSON.stringify({ error: 'Estimate not found' }), { status: 404 });
     }
 
-    const { data: itemsRaw } = await supabaseAdmin
-      .from('estimate_items')
-      .select('description, qty, unit_price, is_optional')
-      .eq('estimate_id', id)
-      .order('sort_order');
-    const items = (itemsRaw || []) as EstimateItemRecord[];
+    // Get estimate items
+    const itemsResult = await client.execute({
+      sql: `
+        SELECT description, quantity as qty, unit_price, is_optional
+        FROM estimate_items
+        WHERE estimate_id = ?
+        ORDER BY sort_order
+      `,
+      args: [id],
+    });
 
-    // Load branding from user profile
+    const items = itemsResult.rows;
+
+    // Load branding from user profile (if we have a users table with branding)
     let branding: { businessName?: string; companyEmail?: string; companyPhone?: string; companyAddress?: string; companyWebsite?: string } | undefined;
+
     if (est.user_id) {
-      const { data: profile } = await supabaseAdmin
-        .from('user_profiles')
-        .select('business_name, preferences')
-        .eq('user_id', est.user_id)
-        .single();
-      const b = (profile?.preferences as any)?.branding || {};
-      branding = {
-        businessName: profile?.business_name || undefined,
-        companyEmail: b.company_email || undefined,
-        companyPhone: b.company_phone || undefined,
-        companyAddress: b.company_address || undefined,
-        companyWebsite: b.company_website || undefined,
-      };
+      const userResult = await client.execute({
+        sql: 'SELECT company_name FROM users WHERE id = ?',
+        args: [est.user_id],
+      });
+
+      if (userResult.rows[0]) {
+        branding = {
+          businessName: userResult.rows[0].company_name as string || undefined,
+        };
+      }
     }
 
-    const jobName = Array.isArray(est.jobs) ? est.jobs[0]?.name : est.jobs?.name;
+    const jobName = est.job_name as string || undefined;
 
     const pdf = estimateToPdfBytes(
       {
-        id: est.id,
-        created_at: est.created_at,
+        id: est.id as string,
+        created_at: est.created_at as string,
         subtotal: Number(est.subtotal),
-        tax: Number(est.tax),
+        tax: Number(est.tax_amount),
         total: Number(est.total),
       },
       items.map((i) => ({
-        description: i.description,
+        description: i.description as string,
         qty: Number(i.qty),
         unit_price: Number(i.unit_price),
-        is_optional: i.is_optional,
+        is_optional: Boolean(i.is_optional),
       })),
-      jobName || undefined,
-      est.po_number || undefined,
+      jobName,
+      est.po_number as string || undefined,
       branding
     ) as Uint8Array<ArrayBuffer>;
 
@@ -90,6 +84,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
       },
     });
   } catch (err: any) {
+    console.error('Error generating PDF:', err);
     return new Response(JSON.stringify({ error: err?.message || 'Failed to generate PDF' }), { status: 500 });
   }
 }

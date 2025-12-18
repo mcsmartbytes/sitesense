@@ -1,26 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { getTurso } from '@/lib/turso';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 });
-
-// Use service role for admin operations
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn('SUPABASE_SERVICE_ROLE_KEY missing for Stripe webhooks. Falling back to NEXT_PUBLIC_SUPABASE_ANON_KEY; set the service key in production.');
-}
-
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !supabaseKey) {
-  throw new Error('Supabase credentials are required for Stripe webhooks.');
-}
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  supabaseKey
-);
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -80,6 +64,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
+  const client = getTurso();
   const userId = session.metadata?.user_id;
   const customerId = session.customer as string;
   const subscriptionId = session.subscription as string;
@@ -92,119 +77,112 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   // Get subscription details from Stripe
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const plan = getPlanFromPriceId(subscription.items.data[0]?.price.id);
+  const status = subscription.status === 'trialing' ? 'trialing' : 'active';
 
-  // Update user profile with subscription info
-  const { error } = await supabaseAdmin
-    .from('user_profiles')
-    .upsert({
-      user_id: userId,
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subscriptionId,
-      subscription_plan: plan,
-      subscription_status: subscription.status === 'trialing' ? 'trialing' : 'active',
-      subscription_start_date: new Date(subscription.current_period_start * 1000).toISOString(),
-      subscription_end_date: new Date(subscription.current_period_end * 1000).toISOString(),
-      trial_start_date: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
-      trial_end_date: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-    }, {
-      onConflict: 'user_id',
+  // Check if user_profiles table exists and update (for apps that use it)
+  // For SiteSense, we store subscription info on the users table
+  try {
+    await client.execute({
+      sql: `
+        UPDATE users SET
+          stripe_customer_id = ?,
+          stripe_subscription_id = ?,
+          subscription_plan = ?,
+          subscription_status = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `,
+      args: [customerId, subscriptionId, plan, status, userId],
     });
 
-  if (error) {
-    console.error('Error updating user profile:', error);
+    console.log(`User ${userId} subscribed to ${plan} plan`);
+  } catch (error) {
+    console.error('Error updating user subscription:', error);
     throw error;
   }
-
-  console.log(`User ${userId} subscribed to ${plan} plan`);
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
+  const client = getTurso();
   const customerId = subscription.customer as string;
   const plan = getPlanFromPriceId(subscription.items.data[0]?.price.id);
+  const status = mapStripeStatus(subscription.status);
 
   // Find user by stripe_customer_id
-  const { data: profile, error: findError } = await supabaseAdmin
-    .from('user_profiles')
-    .select('user_id')
-    .eq('stripe_customer_id', customerId)
-    .single();
+  const userResult = await client.execute({
+    sql: 'SELECT id FROM users WHERE stripe_customer_id = ?',
+    args: [customerId],
+  });
 
-  if (findError || !profile) {
+  const user = userResult.rows[0];
+  if (!user) {
     console.error('User not found for customer:', customerId);
     return;
   }
 
-  const status = mapStripeStatus(subscription.status);
+  await client.execute({
+    sql: `
+      UPDATE users SET
+        subscription_plan = ?,
+        subscription_status = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+    args: [plan, status, user.id],
+  });
 
-  const { error } = await supabaseAdmin
-    .from('user_profiles')
-    .update({
-      subscription_plan: plan,
-      subscription_status: status,
-      subscription_start_date: new Date(subscription.current_period_start * 1000).toISOString(),
-      subscription_end_date: new Date(subscription.current_period_end * 1000).toISOString(),
-    })
-    .eq('user_id', profile.user_id);
-
-  if (error) {
-    console.error('Error updating subscription:', error);
-    throw error;
-  }
-
-  console.log(`Subscription updated for user ${profile.user_id}: ${plan} (${status})`);
+  console.log(`Subscription updated for user ${user.id}: ${plan} (${status})`);
 }
 
 async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
+  const client = getTurso();
   const customerId = subscription.customer as string;
 
-  const { data: profile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('user_id')
-    .eq('stripe_customer_id', customerId)
-    .single();
+  const userResult = await client.execute({
+    sql: 'SELECT id FROM users WHERE stripe_customer_id = ?',
+    args: [customerId],
+  });
 
-  if (!profile) return;
+  const user = userResult.rows[0];
+  if (!user) return;
 
-  const { error } = await supabaseAdmin
-    .from('user_profiles')
-    .update({
-      subscription_status: 'canceled',
-      subscription_plan: 'free',
-    })
-    .eq('user_id', profile.user_id);
+  await client.execute({
+    sql: `
+      UPDATE users SET
+        subscription_status = 'canceled',
+        subscription_plan = 'free',
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+    args: [user.id],
+  });
 
-  if (error) {
-    console.error('Error canceling subscription:', error);
-    throw error;
-  }
-
-  console.log(`Subscription canceled for user ${profile.user_id}`);
+  console.log(`Subscription canceled for user ${user.id}`);
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
+  const client = getTurso();
   const customerId = invoice.customer as string;
 
-  const { data: profile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('user_id')
-    .eq('stripe_customer_id', customerId)
-    .single();
+  const userResult = await client.execute({
+    sql: 'SELECT id FROM users WHERE stripe_customer_id = ?',
+    args: [customerId],
+  });
 
-  if (!profile) return;
+  const user = userResult.rows[0];
+  if (!user) return;
 
-  const { error } = await supabaseAdmin
-    .from('user_profiles')
-    .update({
-      subscription_status: 'past_due',
-    })
-    .eq('user_id', profile.user_id);
+  await client.execute({
+    sql: `
+      UPDATE users SET
+        subscription_status = 'past_due',
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+    args: [user.id],
+  });
 
-  if (error) {
-    console.error('Error updating payment status:', error);
-    throw error;
-  }
-
-  console.log(`Payment failed for user ${profile.user_id}`);
+  console.log(`Payment failed for user ${user.id}`);
 }
 
 function getPlanFromPriceId(priceId: string): 'free' | 'premium' | 'pro' {

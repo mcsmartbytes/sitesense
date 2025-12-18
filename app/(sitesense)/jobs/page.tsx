@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 type Job = {
   id: string;
@@ -11,14 +12,16 @@ type Job = {
   client_name: string | null;
   status: string | null;
   created_at: string;
+  industry_name?: string | null;
   industries?: { name: string }[] | null;
 };
 
 type Industry = { id: string; name: string };
 
-export default function JobsPage() {
+function JobsPageContent() {
+  const { user } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
@@ -26,7 +29,7 @@ export default function JobsPage() {
   const [status, setStatus] = useState('active');
   const [industries, setIndustries] = useState<Industry[]>([]);
   const [industryId, setIndustryId] = useState('');
-  // Roofing-specific fields (optional)
+  // Roofing-specific fields
   const [propertyAddress, setPropertyAddress] = useState('');
   const [structureType, setStructureType] = useState('');
   const [roofType, setRoofType] = useState('');
@@ -36,94 +39,95 @@ export default function JobsPage() {
   const [dumpsterSize, setDumpsterSize] = useState('');
   const [dumpsterHauler, setDumpsterHauler] = useState('');
 
-  async function loadJobs() {
+  useEffect(() => {
+    if (user) {
+      void loadData();
+    }
+  }, [user]);
+
+  async function loadData() {
     setLoading(true);
     setError(null);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setJobs([]);
+    try {
+      // Load industries
+      const indRes = await fetch('/api/industries');
+      const indData = await indRes.json();
+      if (indData.success) {
+        setIndustries(indData.data || []);
+      }
+
+      // Load jobs
+      const jobRes = await fetch(`/api/jobs?user_id=${user?.id}`);
+      const jobData = await jobRes.json();
+      if (jobData.success) {
+        setJobs(jobData.data || []);
+      } else {
+        setError(jobData.error || 'Failed to load jobs');
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load data');
+    } finally {
       setLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('jobs')
-      .select('id, name, client_name, status, created_at, industries(name)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error(error);
-      setError('Failed to load jobs.');
-    } else {
-      setJobs((data || []) as unknown as Job[]);
-    }
-
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    loadJobs();
-    void loadIndustries();
-  }, []);
-
-  async function loadIndustries() {
-    const { data, error } = await supabase
-      .from('industries')
-      .select('id, name')
-      .order('name');
-    if (!error && data) {
-      setIndustries(data as Industry[]);
     }
   }
 
   async function handleCreateJob(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert('Please sign in first.');
-      return;
+    setError(null);
+
+    try {
+      const res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          name: name.trim(),
+          client_name: clientName.trim() || null,
+          status: status || 'active',
+          industry_id: industryId || null,
+          property_address: propertyAddress || null,
+          structure_type: structureType || null,
+          roof_type: roofType || null,
+          roof_pitch: roofPitch || null,
+          layers: layers ? Number(layers) : null,
+          measured_squares: squares ? Number(squares) : null,
+          dumpster_size: dumpsterSize || null,
+          dumpster_hauler: dumpsterHauler || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // Reset form
+        setName('');
+        setClientName('');
+        setStatus('active');
+        setIndustryId('');
+        setPropertyAddress('');
+        setStructureType('');
+        setRoofType('');
+        setRoofPitch('');
+        setLayers('');
+        setSquares('');
+        setDumpsterSize('');
+        setDumpsterHauler('');
+        await loadData();
+      } else {
+        setError(data.error || 'Failed to create job');
+      }
+    } catch (err) {
+      console.error('Error creating job:', err);
+      setError('Failed to create job');
     }
-
-    const { error } = await supabase.from('jobs').insert({
-      name: name.trim(),
-      client_name: clientName.trim() || null,
-      status: status || 'active',
-      industry_id: industryId || null,
-      user_id: user.id,
-      property_address: propertyAddress || null,
-      structure_type: structureType || null,
-      roof_type: roofType || null,
-      roof_pitch: roofPitch || null,
-      layers: layers ? Number(layers) : null,
-      measured_squares: squares ? Number(squares) : null,
-      dumpster_size: dumpsterSize || null,
-      dumpster_hauler: dumpsterHauler || null,
-      // later: org_id, user_id, etc.
-    });
-
-    if (error) {
-      console.error(error);
-      setError('Failed to create job.');
-      return;
-    }
-
-    setName('');
-    setClientName('');
-    setStatus('active');
-    setIndustryId('');
-    setPropertyAddress('');
-    setStructureType('');
-    setRoofType('');
-    setRoofPitch('');
-    setLayers('');
-    setSquares('');
-    setDumpsterSize('');
-    setDumpsterHauler('');
-    await loadJobs();
   }
+
+  const selectedIndustry = industries.find(i => i.id === industryId);
+  const isRoofing = selectedIndustry?.name === 'Roofing';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -139,12 +143,19 @@ export default function JobsPage() {
           </div>
 
           <Link
-            href="/expense-dashboard"
+            href="/"
             className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
           >
             ← Back to Dashboard
           </Link>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+            <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          </div>
+        )}
 
         {/* Add Job form */}
         <section className="bg-white rounded-lg shadow p-5 mb-8">
@@ -200,7 +211,7 @@ export default function JobsPage() {
             </div>
 
             {/* Roofing-specific quick fields */}
-            {industries.find(i => i.id === industryId)?.name === 'Roofing' && (
+            {isRoofing && (
               <>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium mb-1">Property Address</label>
@@ -291,15 +302,13 @@ export default function JobsPage() {
               </button>
             </div>
           </form>
-
-          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </section>
 
         {/* Jobs list */}
         <section className="bg-white rounded-lg shadow overflow-hidden">
           <div className="px-4 py-3 border-b flex justify-between items-center">
-            <h2 className="font-semibold text-gray-900">All Jobs</h2>
-            {loading && <p className="text-xs text-gray-500">Loading…</p>}
+            <h2 className="font-semibold text-gray-900">All Jobs ({jobs.length})</h2>
+            {loading && <p className="text-xs text-gray-500">Loading...</p>}
           </div>
 
           {jobs.length === 0 && !loading ? (
@@ -330,7 +339,7 @@ export default function JobsPage() {
                         {job.client_name || '—'}
                       </td>
                       <td className="px-4 py-2 text-gray-700">
-                        {Array.isArray(job.industries) && job.industries.length > 0 ? job.industries[0].name : '—'}
+                        {job.industry_name || (job.industries && job.industries[0]?.name) || '—'}
                       </td>
                       <td className="px-4 py-2 capitalize">
                         <span
@@ -353,7 +362,7 @@ export default function JobsPage() {
                           href={`/jobs/${job.id}`}
                           className="text-blue-600 hover:text-blue-800 text-sm font-semibold"
                         >
-                          View Details →
+                          View Details
                         </Link>
                       </td>
                     </tr>
@@ -365,5 +374,13 @@ export default function JobsPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function JobsPage() {
+  return (
+    <ProtectedRoute>
+      <JobsPageContent />
+    </ProtectedRoute>
   );
 }

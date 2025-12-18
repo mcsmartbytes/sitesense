@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import InstallPrompt from '@/components/InstallPrompt'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 export const metadata: Metadata = {
   title: 'SiteSense',
@@ -46,8 +47,10 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
-        {children}
-        <InstallPrompt />
+        <AuthProvider>
+          {children}
+          <InstallPrompt />
+        </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

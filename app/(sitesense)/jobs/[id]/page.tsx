@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 
 type Job = {
@@ -12,7 +12,7 @@ type Job = {
   client_name: string | null;
   status: string | null;
   created_at: string;
-  industries?: { name: string }[] | null;
+  industry_name?: string | null;
   property_address?: string | null;
   structure_type?: string | null;
   roof_type?: string | null;
@@ -21,7 +21,7 @@ type Job = {
   measured_squares?: number | null;
   dumpster_size?: string | null;
   dumpster_hauler?: string | null;
-  safety_notes?: string | null;
+  notes?: string | null;
 };
 
 type Expense = {
@@ -31,7 +31,9 @@ type Expense = {
   date: string;
   is_business: boolean;
   vendor: string | null;
-  category: { name: string; icon: string; color: string } | null;
+  category_name: string | null;
+  category_icon: string | null;
+  category_color: string | null;
 };
 
 type TimeEntry = {
@@ -52,11 +54,11 @@ type Phase = {
 type Task = {
   id: string;
   phase_id: string;
-  title: string;
+  name: string;
   status: 'todo' | 'in_progress' | 'blocked' | 'done';
   assignee: string | null;
   due_date: string | null;
-  hours_estimate: number | null;
+  estimated_hours: number | null;
   sort_order: number;
   notes: string | null;
 };
@@ -72,29 +74,17 @@ type Permit = {
 type Material = {
   id: string;
   name: string;
-  qty: number;
+  quantity: number;
   unit: string | null;
   unit_cost: number | null;
   vendor: string | null;
-};
-
-type Photo = {
-  id: string;
-  url: string;
-  kind: 'before' | 'during' | 'after' | 'other';
-};
-
-type WeatherDelay = {
-  id: string;
-  occurred_on: string;
-  hours_lost: number | null;
-  note: string | null;
 };
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const jobId = params.id;
   const router = useRouter();
+  const { user } = useAuth();
 
   const [job, setJob] = useState<Job | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -103,8 +93,6 @@ export default function JobDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [delays, setDelays] = useState<WeatherDelay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,174 +103,61 @@ export default function JobDetailPage() {
     notes: '',
   });
   const [savingTime, setSavingTime] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [addingTaskForPhase, setAddingTaskForPhase] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskEdit, setTaskEdit] = useState<{ assignee: string; due_date: string }>({ assignee: '', due_date: '' });
-  const [editingPermitId, setEditingPermitId] = useState<string | null>(null);
-  const [permitEdit, setPermitEdit] = useState<{ permit_number: string; authority: string; inspection_date: string }>({ permit_number: '', authority: '', inspection_date: '' });
-  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
-  const [materialEdit, setMaterialEdit] = useState<{ name: string; qty: string; unit: string; unit_cost: string; vendor: string }>({ name: '', qty: '1', unit: '', unit_cost: '', vendor: '' });
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  // Simple add forms
   const [newPermit, setNewPermit] = useState({ permit_number: '', authority: '', inspection_date: '' });
-  const [newMaterial, setNewMaterial] = useState({ name: '', qty: '1', unit: '', unit_cost: '', vendor: '' });
-  const [newPhoto, setNewPhoto] = useState({ url: '', kind: 'before' as Photo['kind'] });
-  const [newDelay, setNewDelay] = useState({ occurred_on: new Date().toISOString().split('T')[0], hours_lost: '', note: '' });
+  const [newMaterial, setNewMaterial] = useState({ name: '', quantity: '1', unit: '', unit_cost: '', vendor: '' });
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || !user?.id) return;
     void loadData();
-  }, [jobId]);
+  }, [jobId, user?.id]);
 
   async function loadData() {
+    if (!user?.id) return;
+
     setLoading(true);
     setError(null);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setError('Please sign in');
-        setLoading(false);
-        return;
-      }
+      // Load job details
+      const jobRes = await fetch(`/api/jobs/${jobId}`);
+      const jobData = await jobRes.json();
 
-      // Load job
-      const { data: jobData, error: jobError } = await supabase
-        .from('jobs')
-        .select(`
-          id, name, client_name, status, created_at,
-          property_address, structure_type, roof_type, roof_pitch, layers, measured_squares,
-          dumpster_size, dumpster_hauler, safety_notes,
-          industries(name)
-        `)
-        .eq('id', jobId)
-        .single();
-
-      if (jobError || !jobData) {
+      if (!jobData.success || !jobData.data) {
         setError('Job not found');
         setLoading(false);
         return;
       }
 
-      setJob(jobData as Job);
+      setJob(jobData.data);
 
-      // Load expenses for this job
-      const { data: expenseData, error: expError } = await supabase
-        .from('expenses')
-        .select(
-          `
-          id,
-          amount,
-          description,
-          date,
-          is_business,
-          vendor,
-          categories(name, icon, color)
-        `
-        )
-        .eq('user_id', user.id)
-        .eq('job_id', jobId)
-        .order('date', { ascending: false });
+      // Load related data in parallel
+      const [expensesRes, timeRes, phasesRes, tasksRes, permitsRes, materialsRes] = await Promise.all([
+        fetch(`/api/jobs/${jobId}/expenses`),
+        fetch(`/api/jobs/${jobId}/time-entries`),
+        fetch(`/api/jobs/${jobId}/phases`),
+        fetch(`/api/jobs/${jobId}/tasks`),
+        fetch(`/api/jobs/${jobId}/permits`),
+        fetch(`/api/jobs/${jobId}/materials`),
+      ]);
 
-      if (expError) throw expError;
+      const [expensesData, timeData, phasesData, tasksData, permitsData, materialsData] = await Promise.all([
+        expensesRes.json(),
+        timeRes.json(),
+        phasesRes.json(),
+        tasksRes.json(),
+        permitsRes.json(),
+        materialsRes.json(),
+      ]);
 
-      const formattedExpenses: Expense[] = (expenseData || []).map((e: any) => ({
-        ...e,
-        category: e.categories || null,
-      }));
-      setExpenses(formattedExpenses);
-
-      // Load time entries for this job
-      const { data: timeData, error: timeError } = await supabase
-        .from('time_entries')
-        .select('id, entry_date, hours, hourly_rate, notes')
-        .eq('job_id', jobId)
-        .order('entry_date', { ascending: false });
-
-      if (timeError) throw timeError;
-
-      setTimeEntries(
-        (timeData || []).map((t: any) => ({
-          ...t,
-          hours: Number(t.hours),
-          hourly_rate: t.hourly_rate !== null ? Number(t.hourly_rate) : null,
-        }))
-      );
-
-      // Load phases
-      const { data: phaseData, error: phaseError } = await supabase
-        .from('job_phases')
-        .select('id, name, sort_order, status')
-        .eq('job_id', jobId)
-        .order('sort_order', { ascending: true });
-      if (phaseError) throw phaseError;
-      setPhases((phaseData || []) as Phase[]);
-
-      // Load tasks for phases
-      if (phaseData && phaseData.length > 0) {
-        const phaseIds = (phaseData as any[]).map((p) => p.id);
-        const { data: taskData, error: taskError } = await supabase
-          .from('job_tasks')
-          .select('id, phase_id, title, status, assignee, due_date, hours_estimate, sort_order, notes')
-          .in('phase_id', phaseIds)
-          .order('sort_order', { ascending: true });
-        if (taskError) throw taskError;
-        setTasks(
-          (taskData || []).map((t: any) => ({
-            ...t,
-            hours_estimate: t.hours_estimate !== null ? Number(t.hours_estimate) : null,
-          })) as Task[]
-        );
-      } else {
-        setTasks([]);
-      }
-
-      // Permits
-      const { data: permitData } = await supabase
-        .from('permits')
-        .select('id, permit_number, authority, status, inspection_date')
-        .eq('job_id', jobId)
-        .order('created_at', { ascending: false });
-      setPermits((permitData || []) as Permit[]);
-
-      // Materials
-      const { data: materialData } = await supabase
-        .from('job_materials')
-        .select('id, name, qty, unit, unit_cost, vendor')
-        .eq('job_id', jobId)
-        .order('created_at', { ascending: false });
-      setMaterials(
-        (materialData || []).map((m: any) => ({
-          ...m,
-          qty: Number(m.qty),
-          unit_cost: m.unit_cost !== null ? Number(m.unit_cost) : null,
-        })) as Material[]
-      );
-
-      // Photos
-      const { data: photoData } = await supabase
-        .from('job_photos')
-        .select('id, url, kind')
-        .eq('job_id', jobId)
-        .order('created_at', { ascending: false });
-      setPhotos((photoData || []) as Photo[]);
-
-      // Weather delays
-      const { data: delayData } = await supabase
-        .from('weather_delays')
-        .select('id, occurred_on, hours_lost, note')
-        .eq('job_id', jobId)
-        .order('occurred_on', { ascending: false });
-      setDelays(
-        (delayData || []).map((d: any) => ({
-          ...d,
-          hours_lost: d.hours_lost !== null ? Number(d.hours_lost) : null,
-        })) as WeatherDelay[]
-      );
+      if (expensesData.success) setExpenses(expensesData.data || []);
+      if (timeData.success) setTimeEntries(timeData.data || []);
+      if (phasesData.success) setPhases(phasesData.data || []);
+      if (tasksData.success) setTasks(tasksData.data || []);
+      if (permitsData.success) setPermits(permitsData.data || []);
+      if (materialsData.success) setMaterials(materialsData.data || []);
     } catch (err) {
       console.error(err);
       setError('Failed to load job details.');
@@ -302,11 +177,16 @@ export default function JobDetailPage() {
     return sum + t.hours * t.hourly_rate;
   }, 0);
 
-  const totalJobCost = totalExpense + totalLaborCost;
+  const totalMaterialsCost = materials.reduce((sum, m) => {
+    if (!m.unit_cost) return sum;
+    return sum + m.quantity * m.unit_cost;
+  }, 0);
+
+  const totalJobCost = totalExpense + totalLaborCost + totalMaterialsCost;
 
   async function handleAddTimeEntry(e: React.FormEvent) {
     e.preventDefault();
-    if (!jobId) return;
+    if (!jobId || !user?.id) return;
 
     const hours = parseFloat(newTime.hours || '0');
     const hourlyRate = newTime.hourly_rate ? parseFloat(newTime.hourly_rate) : null;
@@ -318,24 +198,20 @@ export default function JobDetailPage() {
 
     setSavingTime(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        alert('Please sign in');
-        return;
-      }
-
-      const { error } = await supabase.from('time_entries').insert({
-        job_id: jobId,
-        user_id: user.id,
-        entry_date: newTime.entry_date,
-        hours,
-        hourly_rate: hourlyRate,
-        notes: newTime.notes || null,
+      const res = await fetch(`/api/jobs/${jobId}/time-entries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          entry_date: newTime.entry_date,
+          hours,
+          hourly_rate: hourlyRate,
+          notes: newTime.notes || null,
+        }),
       });
 
-      if (error) throw error;
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
 
       setNewTime({
         entry_date: newTime.entry_date,
@@ -351,193 +227,122 @@ export default function JobDetailPage() {
     }
   }
 
-  async function seedPhases() {
-    if (!jobId) return;
-    setSeeding(true);
-    try {
-      const { error } = await supabase.rpc('seed_phases_for_job', { p_job_id: jobId });
-      if (error) throw error;
-      await loadData();
-    } catch (err: any) {
-      alert('Failed to seed phases: ' + (err.message || 'Unknown error'));
-    } finally {
-      setSeeding(false);
-    }
-  }
-
   async function updateTaskStatus(taskId: string, status: Task['status']) {
-    const { error } = await supabase
-      .from('job_tasks')
-      .update({ status })
-      .eq('id', taskId);
-    if (!error) await loadData();
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/tasks`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: taskId, status }),
+      });
+      const data = await res.json();
+      if (data.success) await loadData();
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+    }
   }
 
   async function addTask(phaseId: string) {
     if (!newTaskTitle.trim()) return;
-    const { error } = await supabase
-      .from('job_tasks')
-      .insert({ phase_id: phaseId, title: newTaskTitle.trim(), status: 'todo' });
-    if (error) {
-      alert('Failed to add task');
-      return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phase_id: phaseId, name: newTaskTitle.trim(), status: 'todo' }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setNewTaskTitle('');
+      setAddingTaskForPhase(null);
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to add task: ' + (err.message || 'Unknown error'));
     }
-    setNewTaskTitle('');
-    setAddingTaskForPhase(null);
-    await loadData();
   }
 
   async function saveTaskEdit(taskId: string) {
-    const { error } = await supabase
-      .from('job_tasks')
-      .update({ assignee: taskEdit.assignee || null, due_date: taskEdit.due_date || null })
-      .eq('id', taskId);
-    if (!error) {
-      setEditingTaskId(null);
-      await loadData();
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/tasks`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
+          assignee: taskEdit.assignee || null,
+          due_date: taskEdit.due_date || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingTaskId(null);
+        await loadData();
+      }
+    } catch (err) {
+      console.error('Failed to save task edit:', err);
     }
   }
 
-  // Permits
   async function addPermit() {
     if (!jobId) return;
-    const payload = {
-      job_id: jobId,
-      permit_number: newPermit.permit_number || null,
-      authority: newPermit.authority || null,
-      status: 'applied' as Permit['status'],
-      inspection_date: newPermit.inspection_date || null,
-    };
-    const { error } = await supabase.from('permits').insert(payload);
-    if (error) {
-      alert('Failed to add permit');
-      return;
-    }
-    setNewPermit({ permit_number: '', authority: '', inspection_date: '' });
-    await loadData();
-  }
-  async function deletePermit(id: string) {
-    const { error } = await supabase.from('permits').delete().eq('id', id);
-    if (!error) await loadData();
-  }
-
-  // Materials
-  async function addMaterial() {
-    if (!jobId || !newMaterial.name.trim()) return;
-    const { error } = await supabase.from('job_materials').insert({
-      job_id: jobId,
-      name: newMaterial.name.trim(),
-      qty: newMaterial.qty ? Number(newMaterial.qty) : 1,
-      unit: newMaterial.unit || null,
-      unit_cost: newMaterial.unit_cost ? Number(newMaterial.unit_cost) : null,
-      vendor: newMaterial.vendor || null,
-    });
-    if (error) {
-      alert('Failed to add material');
-      return;
-    }
-    setNewMaterial({ name: '', qty: '1', unit: '', unit_cost: '', vendor: '' });
-    await loadData();
-  }
-  async function deleteMaterial(id: string) {
-    const { error } = await supabase.from('job_materials').delete().eq('id', id);
-    if (!error) await loadData();
-  }
-
-  // Photos
-  async function addPhoto() {
-    if (!jobId || !newPhoto.url.trim()) return;
-    const { error } = await supabase.from('job_photos').insert({
-      job_id: jobId,
-      url: newPhoto.url.trim(),
-      kind: newPhoto.kind,
-    });
-    if (error) {
-      alert('Failed to add photo');
-      return;
-    }
-    setNewPhoto({ url: '', kind: 'before' });
-    await loadData();
-  }
-  async function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[1] ? null : e.target.files?.[0] || null; // single
-    setPhotoFile(f || null);
-  }
-
-  async function uploadPhotoToStorage() {
-    if (!photoFile || !jobId) return;
     try {
-      setUploadingPhoto(true);
-      const path = `${jobId}/${Date.now()}_${photoFile.name}`;
-      const { error: upErr } = await supabase.storage.from('job-photos').upload(path, photoFile, { cacheControl: '3600', upsert: false });
-      if (upErr) throw upErr;
-      const { data } = supabase.storage.from('job-photos').getPublicUrl(path);
-      const publicUrl = data.publicUrl;
-      const { error } = await supabase.from('job_photos').insert({ job_id: jobId, url: publicUrl, kind: newPhoto.kind });
-      if (error) throw error;
-      setPhotoFile(null);
+      const res = await fetch(`/api/jobs/${jobId}/permits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          permit_number: newPermit.permit_number || null,
+          authority: newPermit.authority || null,
+          status: 'applied',
+          inspection_date: newPermit.inspection_date || null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setNewPermit({ permit_number: '', authority: '', inspection_date: '' });
       await loadData();
     } catch (err: any) {
-      alert('Upload failed (ensure bucket job-photos exists and is public): ' + (err.message || 'Unknown error'));
-    } finally {
-      setUploadingPhoto(false);
+      alert('Failed to add permit: ' + (err.message || 'Unknown error'));
     }
   }
 
-  async function savePermitEditRow(id: string) {
-    const { error } = await supabase
-      .from('permits')
-      .update({
-        permit_number: permitEdit.permit_number || null,
-        authority: permitEdit.authority || null,
-        inspection_date: permitEdit.inspection_date || null,
-      })
-      .eq('id', id);
-    if (!error) {
-      setEditingPermitId(null);
+  async function deletePermit(id: string) {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/permits?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) await loadData();
+    } catch (err) {
+      console.error('Failed to delete permit:', err);
+    }
+  }
+
+  async function addMaterial() {
+    if (!jobId || !newMaterial.name.trim()) return;
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/materials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newMaterial.name.trim(),
+          quantity: newMaterial.quantity ? Number(newMaterial.quantity) : 1,
+          unit: newMaterial.unit || null,
+          unit_cost: newMaterial.unit_cost ? Number(newMaterial.unit_cost) : null,
+          vendor: newMaterial.vendor || null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      setNewMaterial({ name: '', quantity: '1', unit: '', unit_cost: '', vendor: '' });
       await loadData();
+    } catch (err: any) {
+      alert('Failed to add material: ' + (err.message || 'Unknown error'));
     }
   }
 
-  async function saveMaterialEditRow(id: string) {
-    const { error } = await supabase
-      .from('job_materials')
-      .update({
-        name: materialEdit.name.trim() || null,
-        qty: materialEdit.qty ? Number(materialEdit.qty) : null,
-        unit: materialEdit.unit || null,
-        unit_cost: materialEdit.unit_cost ? Number(materialEdit.unit_cost) : null,
-        vendor: materialEdit.vendor || null,
-      })
-      .eq('id', id);
-    if (!error) {
-      setEditingMaterialId(null);
-      await loadData();
+  async function deleteMaterial(id: string) {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/materials?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) await loadData();
+    } catch (err) {
+      console.error('Failed to delete material:', err);
     }
-  }
-  async function deletePhoto(id: string) {
-    const { error } = await supabase.from('job_photos').delete().eq('id', id);
-    if (!error) await loadData();
-  }
-
-  async function addDelay() {
-    if (!jobId || !newDelay.occurred_on) return;
-    const { error } = await supabase.from('weather_delays').insert({
-      job_id: jobId,
-      occurred_on: newDelay.occurred_on,
-      hours_lost: newDelay.hours_lost ? Number(newDelay.hours_lost) : null,
-      note: newDelay.note || null,
-    });
-    if (error) {
-      alert('Failed to add weather delay');
-      return;
-    }
-    setNewDelay({ occurred_on: new Date().toISOString().split('T')[0], hours_lost: '', note: '' });
-    await loadData();
-  }
-  async function deleteDelay(id: string) {
-    const { error } = await supabase.from('weather_delays').delete().eq('id', id);
-    if (!error) await loadData();
   }
 
   if (loading) {
@@ -545,7 +350,7 @@ export default function JobDetailPage() {
       <div className="min-h-screen bg-gray-50">
         <Navigation variant="sitesense" />
         <div className="flex items-center justify-center py-24">
-          <p className="text-gray-600">Loading job…</p>
+          <p className="text-gray-600">Loading job...</p>
         </div>
       </div>
     );
@@ -578,9 +383,7 @@ export default function JobDetailPage() {
             <h1 className="text-3xl font-bold text-gray-900">{job.name}</h1>
             <p className="text-gray-600 text-sm mt-1">
               {job.client_name && <span>Client: {job.client_name} · </span>}
-              {Array.isArray(job.industries) && job.industries.length > 0 && (
-                <span>Industry: {job.industries[0].name} · </span>
-              )}
+              {job.industry_name && <span>Industry: {job.industry_name} · </span>}
               <span className="capitalize">Status: {job.status || 'active'}</span>
             </p>
           </div>
@@ -596,8 +399,8 @@ export default function JobDetailPage() {
             <p className="text-2xl font-bold text-gray-900 mt-1">${totalExpense.toFixed(2)}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-xs text-gray-500 uppercase">Business Expenses</p>
-            <p className="text-2xl font-bold text-blue-700 mt-1">${totalBusinessExpense.toFixed(2)}</p>
+            <p className="text-xs text-gray-500 uppercase">Materials Cost</p>
+            <p className="text-2xl font-bold text-blue-700 mt-1">${totalMaterialsCost.toFixed(2)}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-xs text-gray-500 uppercase">Hours Logged</p>
@@ -636,10 +439,10 @@ export default function JobDetailPage() {
                         <td className="px-4 py-2">{new Date(e.date).toLocaleDateString()}</td>
                         <td className="px-4 py-2">{e.description}</td>
                         <td className="px-4 py-2">
-                          {e.category && (
+                          {e.category_name && (
                             <span className="inline-flex items-center gap-1">
-                              <span>{e.category.icon}</span>
-                              <span>{e.category.name}</span>
+                              <span>{e.category_icon}</span>
+                              <span>{e.category_name}</span>
                             </span>
                           )}
                         </td>
@@ -682,7 +485,7 @@ export default function JobDetailPage() {
               </div>
 
               <button type="submit" disabled={savingTime} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
-                {savingTime ? 'Saving…' : '+ Add Time Entry'}
+                {savingTime ? 'Saving...' : '+ Add Time Entry'}
               </button>
             </form>
 
@@ -716,19 +519,16 @@ export default function JobDetailPage() {
         </div>
 
         {/* Phases & Tasks */}
-        <section className="bg-white rounded-lg shadow">
+        <section className="bg-white rounded-lg shadow mt-6">
           <div className="px-4 py-3 border-b flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-gray-900">Project Phases</h2>
               <p className="text-xs text-gray-500">Track progress from intake to closeout.</p>
             </div>
-            <button onClick={seedPhases} disabled={seeding || phases.length > 0} className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded-lg disabled:opacity-50" title={phases.length > 0 ? 'Phases already exist' : 'Seed from industry templates'}>
-              {seeding ? 'Seeding…' : phases.length > 0 ? 'Phases Ready' : 'Seed Phases'}
-            </button>
           </div>
 
           {phases.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">No phases yet. Click "Seed Phases" to add the standard workflow.</div>
+            <div className="p-6 text-sm text-gray-500">No phases yet. Phases will appear when configured.</div>
           ) : (
             <div className="divide-y">
               {phases.map((p) => (
@@ -752,7 +552,7 @@ export default function JobDetailPage() {
                       <li key={t.id} className="bg-gray-50 rounded p-2">
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="font-medium text-gray-800">{t.title}</p>
+                            <p className="font-medium text-gray-800">{t.name}</p>
                             {editingTaskId === t.id ? (
                               <div className="mt-1 flex items-center gap-2 text-xs">
                                 <input value={taskEdit.assignee} onChange={(e) => setTaskEdit({ ...taskEdit, assignee: e.target.value })} placeholder="Assignee" className="px-2 py-1 border rounded" />
@@ -821,40 +621,12 @@ export default function JobDetailPage() {
                   <tbody>
                     {permits.map((p) => (
                       <tr key={p.id} className="border-t">
-                        <td className="px-3 py-2">
-                          {editingPermitId === p.id ? (
-                            <input className="px-2 py-1 border rounded w-full" value={permitEdit.permit_number} onChange={(e) => setPermitEdit({ ...permitEdit, permit_number: e.target.value })} />
-                          ) : (
-                            p.permit_number || '—'
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {editingPermitId === p.id ? (
-                            <input className="px-2 py-1 border rounded w-full" value={permitEdit.authority} onChange={(e) => setPermitEdit({ ...permitEdit, authority: e.target.value })} />
-                          ) : (
-                            p.authority || '—'
-                          )}
-                        </td>
+                        <td className="px-3 py-2">{p.permit_number || '—'}</td>
+                        <td className="px-3 py-2">{p.authority || '—'}</td>
                         <td className="px-3 py-2 capitalize">{p.status}</td>
-                        <td className="px-3 py-2">
-                          {editingPermitId === p.id ? (
-                            <input type="date" className="px-2 py-1 border rounded w-full" value={permitEdit.inspection_date} onChange={(e) => setPermitEdit({ ...permitEdit, inspection_date: e.target.value })} />
-                          ) : (
-                            p.inspection_date ? new Date(p.inspection_date).toLocaleDateString() : '—'
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right space-x-3">
-                          {editingPermitId === p.id ? (
-                            <>
-                              <button onClick={() => savePermitEditRow(p.id)} className="text-blue-600 hover:text-blue-700">Save</button>
-                              <button onClick={() => setEditingPermitId(null)} className="text-gray-600 hover:text-gray-700">Cancel</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => { setEditingPermitId(p.id); setPermitEdit({ permit_number: p.permit_number || '', authority: p.authority || '', inspection_date: p.inspection_date || '' }); }} className="text-blue-600 hover:text-blue-700">Edit</button>
-                              <button onClick={() => deletePermit(p.id)} className="text-red-600 hover:text-red-700">Delete</button>
-                            </>
-                          )}
+                        <td className="px-3 py-2">{p.inspection_date ? new Date(p.inspection_date).toLocaleDateString() : '—'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button onClick={() => deletePermit(p.id)} className="text-red-600 hover:text-red-700">Delete</button>
                         </td>
                       </tr>
                     ))}
@@ -873,10 +645,9 @@ export default function JobDetailPage() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
               <input placeholder="Material name" value={newMaterial.name} onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })} className="px-3 py-2 border rounded md:col-span-2" />
-              <input type="number" min="0" step="0.01" placeholder="Qty" value={newMaterial.qty} onChange={(e) => setNewMaterial({ ...newMaterial, qty: e.target.value })} className="px-3 py-2 border rounded" />
+              <input type="number" min="0" step="0.01" placeholder="Qty" value={newMaterial.quantity} onChange={(e) => setNewMaterial({ ...newMaterial, quantity: e.target.value })} className="px-3 py-2 border rounded" />
               <input placeholder="Unit (e.g., sq, roll)" value={newMaterial.unit} onChange={(e) => setNewMaterial({ ...newMaterial, unit: e.target.value })} className="px-3 py-2 border rounded" />
               <input type="number" step="0.01" min="0" placeholder="Unit Cost" value={newMaterial.unit_cost} onChange={(e) => setNewMaterial({ ...newMaterial, unit_cost: e.target.value })} className="px-3 py-2 border rounded" />
-              <input placeholder="Vendor" value={newMaterial.vendor} onChange={(e) => setNewMaterial({ ...newMaterial, vendor: e.target.value })} className="px-3 py-2 border rounded" />
               <button onClick={addMaterial} className="px-3 py-2 bg-blue-600 text-white rounded">Add</button>
             </div>
 
@@ -899,22 +670,12 @@ export default function JobDetailPage() {
                     {materials.map((m) => (
                       <tr key={m.id} className="border-t">
                         <td className="px-3 py-2">{m.name}</td>
-                        <td className="px-3 py-2">{m.qty}</td>
+                        <td className="px-3 py-2">{m.quantity}</td>
                         <td className="px-3 py-2">{m.unit || '—'}</td>
                         <td className="px-3 py-2">{m.unit_cost !== null ? `$${m.unit_cost.toFixed(2)}` : '—'}</td>
                         <td className="px-3 py-2">{m.vendor || '—'}</td>
-                        <td className="px-3 py-2 text-right space-x-3">
-                          {editingMaterialId === m.id ? (
-                            <>
-                              <button onClick={() => saveMaterialEditRow(m.id)} className="text-blue-600 hover:text-blue-700">Save</button>
-                              <button onClick={() => setEditingMaterialId(null)} className="text-gray-600 hover:text-gray-700">Cancel</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => { setEditingMaterialId(m.id); setMaterialEdit({ name: m.name, qty: String(m.qty), unit: m.unit || '', unit_cost: m.unit_cost !== null ? String(m.unit_cost) : '', vendor: m.vendor || '' }); }} className="text-blue-600 hover:text-blue-700">Edit</button>
-                              <button onClick={() => deleteMaterial(m.id)} className="text-red-600 hover:text-red-700">Delete</button>
-                            </>
-                          )}
+                        <td className="px-3 py-2 text-right">
+                          <button onClick={() => deleteMaterial(m.id)} className="text-red-600 hover:text-red-700">Delete</button>
                         </td>
                       </tr>
                     ))}
@@ -933,91 +694,6 @@ export default function JobDetailPage() {
           </div>
           <div className="p-4 text-sm text-gray-500">
             Create professional estimates with optional add-ons and photo attachments.
-          </div>
-        </section>
-
-        {/* Photos */}
-        <section className="bg-white rounded-lg shadow mt-6">
-          <div className="px-4 py-3 border-b">
-            <h2 className="font-semibold text-gray-900">Photos</h2>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <input placeholder="Image URL" value={newPhoto.url} onChange={(e) => setNewPhoto({ ...newPhoto, url: e.target.value })} className="px-3 py-2 border rounded md:col-span-2" />
-              <select value={newPhoto.kind} onChange={(e) => setNewPhoto({ ...newPhoto, kind: e.target.value as Photo['kind'] })} className="px-3 py-2 border rounded">
-                <option value="before">Before</option>
-                <option value="during">During</option>
-                <option value="after">After</option>
-                <option value="other">Other</option>
-              </select>
-              <input type="file" accept="image/*" onChange={handlePhotoFileChange} className="px-3 py-2 border rounded" />
-              <div className="flex gap-2">
-                <button onClick={addPhoto} className="px-3 py-2 bg-blue-600 text-white rounded">Add by URL</button>
-                <button onClick={uploadPhotoToStorage} disabled={uploadingPhoto || !photoFile} className="px-3 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">{uploadingPhoto ? 'Uploading…' : 'Upload File'}</button>
-              </div>
-            </div>
-
-            {photos.length === 0 ? (
-              <p className="text-sm text-gray-500">No photos yet.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {photos.map((p) => (
-                  <div key={p.id} className="bg-gray-50 rounded border overflow-hidden">
-                    <div className="aspect-[4/3] bg-gray-100">
-                      <img src={p.url} alt={p.kind} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="p-2 flex items-center justify-between text-xs text-gray-700">
-                      <span className="capitalize">{p.kind}</span>
-                      <button onClick={() => deletePhoto(p.id)} className="text-red-600 hover:text-red-700">Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Weather Delays */}
-        <section className="bg-white rounded-lg shadow mt-6">
-          <div className="px-4 py-3 border-b">
-            <h2 className="font-semibold text-gray-900">Weather Delays</h2>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <input type="date" value={newDelay.occurred_on} onChange={(e) => setNewDelay({ ...newDelay, occurred_on: e.target.value })} className="px-3 py-2 border rounded" title="Date" />
-              <input type="number" min="0" step="0.25" placeholder="Hours Lost" value={newDelay.hours_lost} onChange={(e) => setNewDelay({ ...newDelay, hours_lost: e.target.value })} className="px-3 py-2 border rounded" />
-              <input placeholder="Note" value={newDelay.note} onChange={(e) => setNewDelay({ ...newDelay, note: e.target.value })} className="px-3 py-2 border rounded md:col-span-1" />
-              <button onClick={addDelay} className="px-3 py-2 bg-blue-600 text-white rounded">Add Delay</button>
-            </div>
-
-            {delays.length === 0 ? (
-              <p className="text-sm text-gray-500">No weather delays logged.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Date</th>
-                      <th className="px-3 py-2 text-left">Hours Lost</th>
-                      <th className="px-3 py-2 text-left">Note</th>
-                      <th className="px-3 py-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {delays.map((d) => (
-                      <tr key={d.id} className="border-t">
-                        <td className="px-3 py-2">{new Date(d.occurred_on).toLocaleDateString()}</td>
-                        <td className="px-3 py-2">{d.hours_lost !== null ? d.hours_lost.toFixed(2) : '—'}</td>
-                        <td className="px-3 py-2">{d.note || '—'}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button onClick={() => deleteDelay(d.id)} className="text-red-600 hover:text-red-700">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </section>
       </main>

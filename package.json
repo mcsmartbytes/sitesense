@@ -11,14 +11,21 @@
     "start": "next start"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "@stripe/stripe-js": "^2.4.0",
-    "@supabase/supabase-js": "^2.45.0",
+    "@types/qrcode": "^1.5.6",
+    "bcryptjs": "^3.0.3",
+    "html5-qrcode": "^2.3.8",
+    "jsonwebtoken": "^9.0.3",
     "next": "^16.0.8",
+    "qrcode": "^1.5.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "stripe": "^14.10.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "autoprefixer": "^10.4.21",

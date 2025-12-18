@@ -1,18 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/utils/supabaseAdmin';
+import { getTurso, generateId } from '@/lib/turso';
 
-// GET - fetch all categories
-export async function GET() {
+// GET - fetch all categories for a user
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('categories')
-      .select('*')
-      .order('name');
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('user_id');
 
-    if (error) throw error;
+    const client = getTurso();
 
-    return NextResponse.json({ success: true, data });
+    let sql = 'SELECT * FROM categories';
+    const args: string[] = [];
+
+    if (userId) {
+      sql += ' WHERE user_id = ?';
+      args.push(userId);
+    }
+
+    sql += ' ORDER BY name ASC';
+
+    const result = await client.execute({ sql, args });
+
+    return NextResponse.json({
+      success: true,
+      data: result.rows,
+    });
   } catch (error: any) {
+    console.error('Error fetching categories:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -33,26 +47,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Only include user_id if provided (for authenticated users)
-    // Otherwise, omit it to allow NULL (requires DB column to be nullable)
-    const categoriesToInsert = categories.map((cat: any) => {
-      const { user_id: catUserId, ...rest } = cat;
-      const finalUserId = catUserId || user_id;
-      if (finalUserId) {
-        return { ...rest, user_id: finalUserId };
-      }
-      return rest; // No user_id - will be NULL if column allows
+    const client = getTurso();
+    const createdCategories = [];
+
+    for (const cat of categories) {
+      const id = generateId();
+      const finalUserId = cat.user_id || user_id || null;
+
+      await client.execute({
+        sql: `
+          INSERT INTO categories (id, user_id, name, icon, color, deduction_percentage)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          id,
+          finalUserId,
+          cat.name,
+          cat.icon || null,
+          cat.color || null,
+          cat.deduction_percentage || 100,
+        ],
+      });
+
+      createdCategories.push({
+        id,
+        user_id: finalUserId,
+        name: cat.name,
+        icon: cat.icon || null,
+        color: cat.color || null,
+        deduction_percentage: cat.deduction_percentage || 100,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: createdCategories,
     });
-
-    const { data, error } = await supabaseAdmin
-      .from('categories')
-      .insert(categoriesToInsert)
-      .select();
-
-    if (error) throw error;
-
-    return NextResponse.json({ success: true, data });
   } catch (error: any) {
+    console.error('Error creating categories:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -73,15 +105,19 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await supabaseAdmin
-      .from('categories')
-      .delete()
-      .eq('id', id);
+    const client = getTurso();
 
-    if (error) throw error;
+    await client.execute({
+      sql: 'DELETE FROM categories WHERE id = ?',
+      args: [id],
+    });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: 'Category deleted',
+    });
   } catch (error: any) {
+    console.error('Error deleting category:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -102,17 +138,46 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('categories')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    const client = getTurso();
 
-    if (error) throw error;
+    const allowedFields = ['name', 'icon', 'color', 'deduction_percentage'];
+    const fields: string[] = [];
+    const values: (string | number | null)[] = [];
 
-    return NextResponse.json({ success: true, data });
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(value as string | number | null);
+      }
+    }
+
+    if (fields.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No valid fields to update' },
+        { status: 400 }
+      );
+    }
+
+    fields.push("updated_at = datetime('now')");
+    values.push(id);
+
+    await client.execute({
+      sql: `UPDATE categories SET ${fields.join(', ')} WHERE id = ?`,
+      args: values,
+    });
+
+    // Return the updated category
+    const result = await client.execute({
+      sql: 'SELECT * FROM categories WHERE id = ?',
+      args: [id],
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: result.rows[0],
+    });
   } catch (error: any) {
+    console.error('Error updating category:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

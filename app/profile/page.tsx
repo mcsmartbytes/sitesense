@@ -2,104 +2,46 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/utils/supabase';
-import { INDUSTRY_CATEGORIES, IndustryKey } from '@/utils/industryCategories';
+import Navigation from '@/components/Navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Category {
   id: string;
   name: string;
   color: string;
   icon: string;
-  is_tax_deductible: boolean;
+  deduction_percentage: number;
 }
-
-interface UserProfile {
-  email: string;
-  created_at: string;
-  industry?: string;
-  business_name?: string;
-  preferences?: any;
-}
-
-const INDUSTRIES: { key: IndustryKey; label: string }[] = [
-  { key: 'real_estate', label: 'Real Estate' },
-  { key: 'construction', label: 'Construction' },
-  { key: 'healthcare', label: 'Healthcare' },
-  { key: 'consulting', label: 'Consulting' },
-  { key: 'retail', label: 'Retail' },
-  { key: 'restaurant', label: 'Restaurant / Food Service' },
-  { key: 'technology', label: 'Technology' },
-  { key: 'transportation', label: 'Transportation / Logistics' },
-  { key: 'creative', label: 'Creative / Design' },
-  { key: 'legal', label: 'Legal' },
-  { key: 'accounting', label: 'Accounting / Finance' },
-  { key: 'fitness', label: 'Fitness / Wellness' },
-  { key: 'photography', label: 'Photography / Videography' },
-  { key: 'other', label: 'Other' },
-];
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { user, loading: authLoading, refreshUser } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
-  const [selectedIndustry, setSelectedIndustry] = useState<IndustryKey | ''>('');
   const [businessName, setBusinessName] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [companyEmail, setCompanyEmail] = useState('');
-  const [companyPhone, setCompanyPhone] = useState('');
-  const [companyAddress, setCompanyAddress] = useState('');
-  const [companyWebsite, setCompanyWebsite] = useState('');
-  const [preferences, setPreferences] = useState<any>({});
   const [savingProfile, setSavingProfile] = useState(false);
-  const [creatingCategories, setCreatingCategories] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [newCategory, setNewCategory] = useState({
     name: '',
     icon: '💰',
     color: '#3B82F6',
-    is_tax_deductible: true,
+    deduction_percentage: 100,
   });
 
   useEffect(() => {
-    loadProfile();
-    loadCategories();
-  }, []);
-
-  async function loadProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setProfile({
-        email: user.email || '',
-        created_at: user.created_at,
-      });
-
-      // Load user profile with industry
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('industry, business_name, preferences')
-        .eq('user_id', user.id)
-        .single();
-
-      if (userProfile) {
-        setSelectedIndustry((userProfile.industry as IndustryKey) || '');
-        setBusinessName(userProfile.business_name || '');
-        setPreferences(userProfile.preferences || {});
-        const branding = (userProfile.preferences || {}).branding || {};
-        setLogoUrl(branding.logo_url || '');
-        setCompanyEmail(branding.company_email || '');
-        setCompanyPhone(branding.company_phone || '');
-        setCompanyAddress(branding.company_address || '');
-        setCompanyWebsite(branding.company_website || '');
-      }
+    if (!authLoading && user) {
+      setBusinessName(user.company_name || '');
+      loadCategories();
+      setLoading(false);
+    } else if (!authLoading && !user) {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  }, [authLoading, user]);
 
   async function loadCategories() {
     try {
-      const response = await fetch('/api/categories');
+      const response = await fetch(`/api/categories?user_id=${user?.id}`);
       const result = await response.json();
       if (result.success && result.data) {
         setCategories(result.data);
@@ -110,78 +52,29 @@ export default function ProfilePage() {
   }
 
   async function handleSaveProfile() {
+    if (!user) return;
     setSavingProfile(true);
     setMessage(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || '00000000-0000-0000-0000-000000000000';
-
-      // Check if profile exists
-      const { data: existing } = await supabase
-        .from('user_profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .single();
-
-      const branding = {
-        logo_url: logoUrl || null,
-        company_email: companyEmail || null,
-        company_phone: companyPhone || null,
-        company_address: companyAddress || null,
-        company_website: companyWebsite || null,
-      };
-      const newPrefs = { ...(preferences || {}), branding };
-
-      if (existing) {
-        const { error } = await supabase
-          .from('user_profiles')
-          .update({ industry: selectedIndustry, business_name: businessName, preferences: newPrefs })
-          .eq('user_id', userId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('user_profiles')
-          .insert({ user_id: userId, industry: selectedIndustry, business_name: businessName, preferences: newPrefs });
-        if (error) throw error;
-      }
-
-      setMessage({ type: 'success', text: 'Profile saved successfully!' });
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to save profile' });
-    } finally {
-      setSavingProfile(false);
-    }
-  }
-
-  async function handleCreateIndustryCategories() {
-    if (!selectedIndustry) return;
-
-    setCreatingCategories(true);
-    setMessage(null);
-
-    try {
-      const industryCategories = INDUSTRY_CATEGORIES[selectedIndustry];
-      if (!industryCategories || industryCategories.length === 0) {
-        setMessage({ type: 'error', text: 'No predefined categories for this industry' });
-        return;
-      }
-
-      const response = await fetch('/api/categories', {
-        method: 'POST',
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ categories: industryCategories }),
+        body: JSON.stringify({
+          user_id: user.id,
+          company_name: businessName,
+        }),
       });
 
       const result = await response.json();
       if (!result.success) throw new Error(result.error);
 
-      await loadCategories();
-      setMessage({ type: 'success', text: `Added ${industryCategories.length} industry-specific categories!` });
+      await refreshUser();
+      setMessage({ type: 'success', text: 'Profile saved successfully!' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to create categories' });
+      setMessage({ type: 'error', text: error.message || 'Failed to save profile' });
     } finally {
-      setCreatingCategories(false);
+      setSavingProfile(false);
     }
   }
 
@@ -193,14 +86,14 @@ export default function ProfilePage() {
       const response = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ categories: [newCategory] }),
+        body: JSON.stringify({ categories: [{ ...newCategory, user_id: user?.id }] }),
       });
 
       const result = await response.json();
       if (!result.success) throw new Error(result.error);
 
       setShowAddCategory(false);
-      setNewCategory({ name: '', icon: '💰', color: '#3B82F6', is_tax_deductible: true });
+      setNewCategory({ name: '', icon: '💰', color: '#3B82F6', deduction_percentage: 100 });
       loadCategories();
       setMessage({ type: 'success', text: 'Category added!' });
     } catch (error: any) {
@@ -218,7 +111,7 @@ export default function ProfilePage() {
           name: category.name,
           icon: category.icon,
           color: category.color,
-          is_tax_deductible: category.is_tax_deductible,
+          deduction_percentage: category.deduction_percentage,
         }),
       });
 
@@ -261,7 +154,7 @@ export default function ProfilePage() {
     { name: 'Teal', value: '#14B8A6' },
   ];
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -272,32 +165,41 @@ export default function ProfilePage() {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation variant="sitesense" />
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <p className="text-gray-600">Please sign in to view your profile.</p>
+          <Link href="/login" className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+            Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Profile & Settings</h1>
-            <Link href="/expense-dashboard" className="text-blue-600 hover:text-blue-700">
-              ← Back to Dashboard
-            </Link>
-          </div>
+      <Navigation variant="sitesense" />
+      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">Profile & Settings</h1>
+          <Link href="/" className="text-blue-600 hover:text-blue-700">
+            Back to Dashboard
+          </Link>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4">Account Information</h2>
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium text-gray-500">Email</label>
-              <p className="text-gray-900">{profile?.email}</p>
+              <p className="text-gray-900">{user.email}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-500">Member Since</label>
-              <p className="text-gray-900">
-                {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}
-              </p>
+              <label className="text-sm font-medium text-gray-500">Name</label>
+              <p className="text-gray-900">{user.full_name || 'Not set'}</p>
             </div>
           </div>
         </div>
@@ -312,7 +214,6 @@ export default function ProfilePage() {
         {/* Business Profile Section */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4">Business Profile</h2>
-          <p className="text-gray-600 mb-6">Select your industry to get relevant expense categories pre-loaded.</p>
 
           <div className="space-y-4">
             <div>
@@ -326,87 +227,7 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Industry</label>
-              <select
-                value={selectedIndustry}
-                onChange={(e) => setSelectedIndustry(e.target.value as IndustryKey)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Select your industry...</option>
-                {INDUSTRIES.map((ind) => (
-                  <option key={ind.key} value={ind.key}>{ind.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Logo URL</label>
-                <input
-                  type="url"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Email</label>
-                <input
-                  type="email"
-                  value={companyEmail}
-                  onChange={(e) => setCompanyEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Phone</label>
-                <input
-                  type="text"
-                  value={companyPhone}
-                  onChange={(e) => setCompanyPhone(e.target.value)}
-                  placeholder="(555) 123-4567"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Website</label>
-                <input
-                  type="url"
-                  value={companyWebsite}
-                  onChange={(e) => setCompanyWebsite(e.target.value)}
-                  placeholder="https://yourcompany.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Address</label>
-                <textarea
-                  value={companyAddress}
-                  onChange={(e) => setCompanyAddress(e.target.value)}
-                  rows={3}
-                  placeholder="Street, City, State, ZIP"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {selectedIndustry && INDUSTRY_CATEGORIES[selectedIndustry]?.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Available categories for {INDUSTRIES.find(i => i.key === selectedIndustry)?.label}:</h4>
-                <div className="flex flex-wrap gap-2">
-                  {INDUSTRY_CATEGORIES[selectedIndustry].map((cat, idx) => (
-                    <span key={idx} className="inline-flex items-center px-3 py-1 rounded-full text-sm" style={{ backgroundColor: cat.color + '20', color: cat.color }}>
-                      {cat.icon} {cat.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
+            <div className="pt-2">
               <button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
@@ -414,16 +235,6 @@ export default function ProfilePage() {
               >
                 {savingProfile ? 'Saving...' : 'Save Profile'}
               </button>
-
-              {selectedIndustry && INDUSTRY_CATEGORIES[selectedIndustry]?.length > 0 && (
-                <button
-                  onClick={handleCreateIndustryCategories}
-                  disabled={creatingCategories}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50"
-                >
-                  {creatingCategories ? 'Creating...' : `Add ${INDUSTRY_CATEGORIES[selectedIndustry].length} Industry Categories`}
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -489,15 +300,16 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="flex items-center gap-2 mt-6">
-                    <input
-                      type="checkbox"
-                      checked={newCategory.is_tax_deductible}
-                      onChange={(e) => setNewCategory({ ...newCategory, is_tax_deductible: e.target.checked })}
-                      className="w-5 h-5 text-blue-600 rounded"
-                    />
-                    <span className="text-sm font-medium">Tax Deductible</span>
-                  </label>
+                  <label className="block text-sm font-medium mb-1">Tax Deduction %</label>
+                  <select
+                    value={newCategory.deduction_percentage}
+                    onChange={(e) => setNewCategory({ ...newCategory, deduction_percentage: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={100}>100% Deductible</option>
+                    <option value={50}>50% Deductible</option>
+                    <option value={0}>Not Deductible</option>
+                  </select>
                 </div>
               </div>
               <div className="mt-4 flex gap-2">
@@ -573,7 +385,9 @@ export default function ProfilePage() {
                         <p className="font-medium">{category.name}</p>
                         <div className="flex gap-2 text-xs text-gray-500">
                           <span style={{ color: category.color }}>●</span>
-                          {category.is_tax_deductible && <span className="text-green-600">Tax Deductible</span>}
+                          {category.deduction_percentage === 100 && <span className="text-green-600">100% Deductible</span>}
+                          {category.deduction_percentage === 50 && <span className="text-yellow-600">50% Deductible</span>}
+                          {category.deduction_percentage === 0 && <span className="text-gray-400">Not Deductible</span>}
                         </div>
                       </div>
                     </div>

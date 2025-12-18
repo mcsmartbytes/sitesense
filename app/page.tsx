@@ -1,202 +1,232 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import Navigation from '@/components/Navigation';
 
 export default function HomePage() {
-  const [mounted, setMounted] = useState(false);
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Expenses Made Easy
+  // If user is logged in, show dashboard
+  if (user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation variant="sitesense" />
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Welcome back{user.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}!
             </h1>
-            <div className="flex items-center gap-3">
+            <p className="text-gray-600 mt-1">
+              {user.company_name || 'SiteSense Dashboard'}
+            </p>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Link
+              href="/jobs"
+              className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow group"
+            >
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Jobs</h3>
+              <p className="text-sm text-gray-600 mt-1">Manage your active jobs</p>
+            </Link>
+
+            <Link
+              href="/estimates"
+              className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow group"
+            >
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Estimates</h3>
+              <p className="text-sm text-gray-600 mt-1">Create and send estimates</p>
+            </Link>
+
+            <Link
+              href="/tools"
+              className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow group"
+            >
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Tool Tracking</h3>
+              <p className="text-sm text-gray-600 mt-1">Track your equipment</p>
+            </Link>
+
+            <Link
+              href="/tools/scan"
+              className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow group"
+            >
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Scan QR Code</h3>
+              <p className="text-sm text-gray-600 mt-1">Check in/out tools</p>
+            </Link>
+          </div>
+
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Start</h3>
+              <ul className="space-y-3">
+                <li>
+                  <Link href="/tools" className="flex items-center text-blue-600 hover:text-blue-700">
+                    <span className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 text-xs font-bold text-blue-600">1</span>
+                    Add your tools and equipment
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/jobs" className="flex items-center text-blue-600 hover:text-blue-700">
+                    <span className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 text-xs font-bold text-blue-600">2</span>
+                    Create your first job
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/estimates" className="flex items-center text-blue-600 hover:text-blue-700">
+                    <span className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 text-xs font-bold text-blue-600">3</span>
+                    Send an estimate
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow p-6 text-white">
+              <h3 className="text-lg font-semibold mb-2">Tool Tracking</h3>
+              <p className="text-blue-100 mb-4">
+                Keep track of all your tools with QR codes. Know where every tool is and who has it.
+              </p>
               <Link
-                href="/auth/login"
-                className="text-blue-600 hover:text-blue-700 px-4 py-2 rounded-lg transition"
+                href="/tools"
+                className="inline-block bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors"
               >
-                Sign In
-              </Link>
-              <Link
-                href="/pricing"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
-                View Pricing
+                Get Started
               </Link>
             </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Landing page for non-authenticated users
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
+      <header className="py-6 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-white">SiteSense</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/login" className="text-white hover:text-blue-300 transition-colors">
+              Sign in
+            </Link>
+            <Link
+              href="/register"
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors"
+            >
+              Get Started
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-16">
-          <h2 className="text-5xl font-bold text-gray-900 mb-4">
-            Track Your Expenses Effortlessly
-          </h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Manage your finances, categorize expenses, and gain insights with powerful tools
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="text-center">
+          <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6">
+            Job Costing for
+            <span className="text-blue-400"> Contractors</span>
+          </h1>
+          <p className="text-xl text-blue-200 mb-8 max-w-2xl mx-auto">
+            Track jobs, tools, time, and costs in one place. Built for roofing, framing, painting, and all trades.
           </p>
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/pricing"
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition shadow-lg"
+              href="/register"
+              className="bg-blue-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-600 transition-colors shadow-lg"
             >
               Start Free Trial
             </Link>
-            <a
-              href="#features"
-              className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-50 transition"
+            <Link
+              href="/login"
+              className="bg-white/10 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white/20 transition-colors border border-white/20"
             >
-              Learn More
-            </a>
+              Sign In
+            </Link>
           </div>
         </div>
 
-        <div id="features" className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div className="mt-24 grid md:grid-cols-3 gap-8">
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/10">
+            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Unlimited Expense Logging</h3>
-            <p className="text-gray-600 mb-4">
-              Track all your expenses with unlimited entries and detailed categorization
+            <h3 className="text-xl font-semibold text-white mb-2">Job Management</h3>
+            <p className="text-blue-200">
+              Track jobs from estimate to completion. Industry-specific fields for roofing, framing, concrete, and more.
             </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Unlimited expense entries</li>
-              <li>✓ Custom categories</li>
-              <li>✓ Receipt uploads</li>
-              <li>✓ Quick entry forms</li>
-            </ul>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/10">
+            <div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Budget Management</h3>
-            <p className="text-gray-600 mb-4">
-              Set budgets, track spending, and get alerts when approaching limits
+            <h3 className="text-xl font-semibold text-white mb-2">Tool Tracking</h3>
+            <p className="text-blue-200">
+              QR code tracking for all your equipment. Know where every tool is and who has it at all times.
             </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Monthly budgets</li>
-              <li>✓ Category budgets</li>
-              <li>✓ Spending alerts</li>
-              <li>✓ Budget insights</li>
-            </ul>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div className="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/10">
+            <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Advanced Reports</h3>
-            <p className="text-gray-600 mb-4">
-              Generate detailed reports and export your data in multiple formats
+            <h3 className="text-xl font-semibold text-white mb-2">Estimates & Bidding</h3>
+            <p className="text-blue-200">
+              Create professional estimates with PDF export. Send directly to clients and track approval status.
             </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Monthly/yearly reports</li>
-              <li>✓ Category breakdown</li>
-              <li>✓ Export to CSV/PDF</li>
-              <li>✓ Custom date ranges</li>
-            </ul>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Receipt Storage</h3>
-            <p className="text-gray-600 mb-4">
-              Upload and store receipts with automatic organization
-            </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Photo upload</li>
-              <li>✓ Cloud storage</li>
-              <li>✓ Auto-categorization</li>
-              <li>✓ Quick search</li>
-            </ul>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Multi-Currency Support</h3>
-            <p className="text-gray-600 mb-4">
-              Track expenses in multiple currencies with automatic conversion
-            </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ 150+ currencies</li>
-              <li>✓ Real-time rates</li>
-              <li>✓ Auto conversion</li>
-              <li>✓ Travel friendly</li>
-            </ul>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition">
-            <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Progressive Web App</h3>
-            <p className="text-gray-600 mb-4">
-              Install on any device and work offline with PWA technology
-            </p>
-            <ul className="text-sm text-gray-600 space-y-2">
-              <li>✓ Install on mobile/desktop</li>
-              <li>✓ Offline functionality</li>
-              <li>✓ Fast performance</li>
-              <li>✓ Native app experience</li>
-            </ul>
           </div>
         </div>
-
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-2xl p-12 text-center text-white">
-          <h2 className="text-4xl font-bold mb-4">Ready to Get Started?</h2>
-          <p className="text-xl mb-8 opacity-90">
-            Choose the perfect plan for your needs. Start with a 14-day free trial!
-          </p>
-          <Link
-            href="/pricing"
-            className="inline-block bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
-          >
-            View Pricing Plans
-          </Link>
-        </div>
-
-        <footer className="mt-16 pt-8 border-t border-gray-200 text-center text-gray-600">
-          <p className="mb-4">
-            <strong>Features:</strong> Unlimited Expenses • Budget Tracking • Advanced Reports • Receipt Storage
-          </p>
-          <p className="text-sm">
-            © 2025 Expenses Made Easy. All rights reserved.
-          </p>
-        </footer>
       </main>
+
+      <footer className="py-8 px-4 border-t border-white/10">
+        <p className="text-center text-blue-300 text-sm">
+          Built for contractors, by contractors
+        </p>
+      </footer>
     </div>
   );
 }
