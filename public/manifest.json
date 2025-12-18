@@ -1,14 +1,14 @@
 {
-  "name": "Expenses Made Easy",
-  "short_name": "Expenses",
-  "description": "Track business expenses with AI receipt scanning and tax reports",
-  "start_url": "/expense-dashboard",
+  "name": "SiteSense",
+  "short_name": "SiteSense",
+  "description": "Job costing, time tracking, and expense management for contractors",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3B82F6",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "orientation": "portrait-primary",
   "scope": "/",
-  "id": "expenses-made-easy",
+  "id": "sitesense-app",
   "icons": [
     {
       "src": "/icons/icon.svg",
@@ -23,27 +23,34 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["business", "finance", "productivity"],
+  "categories": ["business", "productivity", "utilities"],
   "shortcuts": [
     {
-      "name": "Add Expense",
-      "short_name": "Add",
-      "description": "Add a new expense",
-      "url": "/expenses/new",
+      "name": "Jobs",
+      "short_name": "Jobs",
+      "description": "View and manage jobs",
+      "url": "/jobs",
       "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
-      "name": "Scan Receipt",
-      "short_name": "Scan",
-      "description": "Scan a receipt with AI",
-      "url": "/expenses/new",
+      "name": "Time Tracking",
+      "short_name": "Time",
+      "description": "Track work hours",
+      "url": "/time-tracking",
       "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
-      "name": "Tax Reports",
-      "short_name": "Reports",
-      "description": "View tax reports",
-      "url": "/reports",
+      "name": "Estimates",
+      "short_name": "Estimates",
+      "description": "Create and send estimates",
+      "url": "/estimates",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Tools",
+      "short_name": "Tools",
+      "description": "Tool inventory and checkout",
+      "url": "/tools",
       "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]

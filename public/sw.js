@@ -1,14 +1,16 @@
-const CACHE_NAME = 'expenses-made-easy-v2';
-const STATIC_CACHE = 'static-v2';
-const DYNAMIC_CACHE = 'dynamic-v2';
+const CACHE_NAME = 'sitesense-v1';
+const STATIC_CACHE = 'sitesense-static-v1';
+const DYNAMIC_CACHE = 'sitesense-dynamic-v1';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
   '/',
-  '/expense-dashboard',
-  '/expenses/new',
-  '/profile',
-  '/reports',
+  '/jobs',
+  '/estimates',
+  '/time-tracking',
+  '/tools',
+  '/contacts',
+  '/crew',
   '/manifest.json',
 ];
 
@@ -17,7 +19,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => {
-        console.log('Caching static assets');
+        console.log('SiteSense: Caching static assets');
         return cache.addAll(STATIC_ASSETS);
       })
       .catch((err) => console.log('Cache install error:', err))
@@ -85,15 +87,15 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle push notifications (for future use)
+// Handle push notifications (for future use - tool return reminders, etc.)
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data?.text() || 'New notification',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/icons/icon.svg',
+    badge: '/icons/icon.svg',
     vibrate: [100, 50, 100],
   };
   event.waitUntil(
-    self.registration.showNotification('Expenses Made Easy', options)
+    self.registration.showNotification('SiteSense', options)
   );
 });
