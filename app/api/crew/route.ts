@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTurso, generateId } from '@/lib/turso';
+import { createCrewMemberSchema, updateCrewMemberSchema, validateRequest } from '@/lib/validations';
 
 // GET - Get all crew members for a user
 export async function GET(request: NextRequest) {
@@ -47,6 +48,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // Validate input
+    const validation = validateRequest(createCrewMemberSchema, body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: validation.error },
+        { status: 400 }
+      );
+    }
+
     const {
       user_id,
       name,
@@ -59,14 +70,7 @@ export async function POST(request: NextRequest) {
       license_number,
       insurance_expiry,
       notes,
-    } = body;
-
-    if (!user_id || !name) {
-      return NextResponse.json(
-        { success: false, error: 'user_id and name are required' },
-        { status: 400 }
-      );
-    }
+    } = validation.data;
 
     const client = getTurso();
     const id = generateId();

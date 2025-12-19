@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import { sendEmailSchema, validateRequest } from '@/lib/validations';
 
 // POST - Send an email
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { to, subject, body: emailBody, from_name, reply_to } = body;
 
-    if (!to || !subject || !emailBody) {
+    // Validate input
+    const validation = validateRequest(sendEmailSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'to, subject, and body are required' },
+        { success: false, error: validation.error },
         { status: 400 }
       );
     }
+
+    const { to, subject, body: emailBody, from_name, reply_to } = validation.data;
 
     // Check if SMTP is configured
     const smtpHost = process.env.SMTP_HOST;

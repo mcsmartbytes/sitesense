@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createUser, generateToken, setAuthCookie } from '@/lib/auth';
 import { getTurso, generateId } from '@/lib/turso';
+import { registerSchema, validateRequest } from '@/lib/validations';
 
 // Default categories to seed for new users
 const DEFAULT_CATEGORIES = [
@@ -34,34 +35,20 @@ async function seedDefaultCategories(userId: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, full_name, company_name } = body;
 
-    // Validation
-    if (!email || !password) {
+    // Validate input
+    const validation = validateRequest(registerSchema, body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: validation.error },
         { status: 400 }
       );
     }
 
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      );
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400 }
-      );
-    }
+    const { email, password, full_name, company_name } = validation.data;
 
     // Create user
-    const user = await createUser(email, password, full_name, company_name);
+    const user = await createUser(email, password, full_name, company_name || undefined);
     if (!user) {
       return NextResponse.json(
         { error: 'Failed to create user' },
