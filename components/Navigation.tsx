@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIndustry } from '@/contexts/IndustryContext';
 
 // Quick Utilities Component
 function QuickUtilities({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -387,6 +388,7 @@ function NavDropdown({
 
 export default function Navigation({ variant = 'sitesense' }: { variant?: Variant }) {
   const { user, logout } = useAuth();
+  const { isModuleEnabled, getTerminology } = useIndustry();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -416,18 +418,24 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
     setOpenDropdown(null);
   };
 
-  // Dropdown menu items for SiteSense
-  const workItems: DropdownItem[] = [
-    { href: '/jobs', label: 'Jobs', description: 'Manage projects & clients' },
-    { href: '/estimates', label: 'Estimates', description: 'Create & send bids' },
-    { href: '/sov', label: 'Schedule of Values', description: 'SOV & billing items' },
-    { href: '/bid-packages', label: 'Bid Packages', description: 'Manage trade scopes' },
-    { href: '/subcontractors', label: 'Subcontractors', description: 'Sub compliance & bids' },
-    { href: '/cost-codes', label: 'Cost Codes', description: 'CSI MasterFormat codes' },
-    { href: '/properties', label: 'Properties', description: 'Units, tenants, leases' },
+  // Map menu items to their required modules
+  const allWorkItems: (DropdownItem & { module?: string })[] = [
+    { href: '/jobs', label: getTerminology('job', 'Jobs') + 's', description: 'Manage projects & clients', module: 'jobs' },
+    { href: '/estimates', label: 'Estimates', description: 'Create & send bids', module: 'estimates' },
+    { href: '/sov', label: 'Schedule of Values', description: 'SOV & billing items', module: 'sov' },
+    { href: '/bid-packages', label: 'Bid Packages', description: 'Manage trade scopes', module: 'bid_packages' },
+    { href: '/subcontractors', label: 'Subcontractors', description: 'Sub compliance & bids', module: 'subcontractors' },
+    { href: '/cost-codes', label: 'Cost Codes', description: 'CSI MasterFormat codes', module: 'cost_codes' },
+    { href: '/properties', label: 'Properties', description: 'Units, tenants, leases', module: 'units' },
+    { href: '/properties/work-orders', label: 'Work Orders', description: 'Maintenance requests', module: 'work_orders' },
     { href: '/time-tracking', label: 'Time Tracking', description: 'Log hours worked' },
-    { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules' },
+    { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules', module: 'crews' },
   ];
+
+  // Filter work items based on enabled modules
+  const workItems = useMemo(() => {
+    return allWorkItems.filter(item => !item.module || isModuleEnabled(item.module));
+  }, [isModuleEnabled, getTerminology]);
 
   const financialItems: DropdownItem[] = [
     { href: '/expenses', label: 'Expenses', description: 'Track all expenses' },
@@ -622,18 +630,19 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
               <>
                 <Link href="/" className="block py-2 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Dashboard</Link>
 
-                {/* Work section */}
+                {/* Work section - filtered by enabled modules */}
                 <div className="py-2">
                   <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Work</p>
-                  <Link href="/jobs" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Jobs</Link>
-                  <Link href="/estimates" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Estimates</Link>
-                  <Link href="/sov" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Schedule of Values</Link>
-                  <Link href="/bid-packages" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Bid Packages</Link>
-                  <Link href="/subcontractors" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Subcontractors</Link>
-                  <Link href="/cost-codes" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Cost Codes</Link>
-                  <Link href="/properties" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Properties</Link>
-                  <Link href="/time-tracking" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Time Tracking</Link>
-                  <Link href="/crew" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Team & Crew</Link>
+                  {workItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="block py-1.5 pl-3 text-slate-200 hover:text-white"
+                      onClick={() => setShowMobileMenu(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
                 </div>
 
                 <Link href="/contacts" className="block py-2 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Contacts</Link>
