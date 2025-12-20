@@ -420,6 +420,9 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
   const workItems: DropdownItem[] = [
     { href: '/jobs', label: 'Jobs', description: 'Manage projects & clients' },
     { href: '/estimates', label: 'Estimates', description: 'Create & send bids' },
+    { href: '/sov', label: 'Schedule of Values', description: 'SOV & billing items' },
+    { href: '/bid-packages', label: 'Bid Packages', description: 'Manage trade scopes' },
+    { href: '/subcontractors', label: 'Subcontractors', description: 'Sub compliance & bids' },
     { href: '/time-tracking', label: 'Time Tracking', description: 'Log hours worked' },
     { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules' },
   ];
@@ -622,6 +625,9 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
                   <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Work</p>
                   <Link href="/jobs" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Jobs</Link>
                   <Link href="/estimates" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Estimates</Link>
+                  <Link href="/sov" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Schedule of Values</Link>
+                  <Link href="/bid-packages" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Bid Packages</Link>
+                  <Link href="/subcontractors" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Subcontractors</Link>
                   <Link href="/time-tracking" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Time Tracking</Link>
                   <Link href="/crew" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Team & Crew</Link>
                 </div>

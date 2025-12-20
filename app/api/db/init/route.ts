@@ -554,6 +554,612 @@ export async function POST() {
       `CREATE INDEX IF NOT EXISTS idx_crew_assignments_crew_member_id ON crew_assignments(crew_member_id)`,
       `CREATE INDEX IF NOT EXISTS idx_crew_assignments_job_id ON crew_assignments(job_id)`,
       `CREATE INDEX IF NOT EXISTS idx_tool_checkouts_job_id ON tool_checkouts(checked_out_to_job_id)`,
+
+      // =====================================================
+      // PHASE 1: QUOTE ENGINE - GC EXPANSION
+      // =====================================================
+
+      // CSI Cost Codes
+      `CREATE TABLE IF NOT EXISTS cost_codes (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        division TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        parent_code TEXT,
+        level INTEGER DEFAULT 1,
+        is_default INTEGER DEFAULT 1,
+        user_id TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Subcontractors
+      `CREATE TABLE IF NOT EXISTS subcontractors (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        address TEXT,
+        city TEXT,
+        state TEXT,
+        zip TEXT,
+        primary_trade TEXT,
+        csi_divisions TEXT,
+        license_number TEXT,
+        license_state TEXT,
+        license_expiry TEXT,
+        license_verified INTEGER DEFAULT 0,
+        insurance_company TEXT,
+        insurance_policy_number TEXT,
+        insurance_expiry TEXT,
+        insurance_amount REAL,
+        coi_on_file INTEGER DEFAULT 0,
+        additional_insured INTEGER DEFAULT 0,
+        waiver_of_subrogation INTEGER DEFAULT 0,
+        w9_on_file INTEGER DEFAULT 0,
+        tax_id TEXT,
+        workers_comp_policy TEXT,
+        workers_comp_expiry TEXT,
+        safety_plan_on_file INTEGER DEFAULT 0,
+        osha_certified INTEGER DEFAULT 0,
+        emr_rating REAL,
+        rating INTEGER,
+        projects_completed INTEGER DEFAULT 0,
+        is_preferred INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Subcontractor Documents
+      `CREATE TABLE IF NOT EXISTS subcontractor_documents (
+        id TEXT PRIMARY KEY,
+        subcontractor_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        expiry_date TEXT,
+        verified INTEGER DEFAULT 0,
+        verified_at TEXT,
+        verified_by TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Bid Packages
+      `CREATE TABLE IF NOT EXISTS bid_packages (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        package_number TEXT,
+        name TEXT NOT NULL,
+        csi_division TEXT,
+        description TEXT,
+        scope_of_work TEXT,
+        inclusions TEXT,
+        exclusions TEXT,
+        bid_due_date TEXT,
+        work_start_date TEXT,
+        work_end_date TEXT,
+        budget_estimate REAL,
+        status TEXT DEFAULT 'draft',
+        awarded_to TEXT,
+        awarded_amount REAL,
+        awarded_at TEXT,
+        attachments TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Bid Package Invites
+      `CREATE TABLE IF NOT EXISTS bid_package_invites (
+        id TEXT PRIMARY KEY,
+        bid_package_id TEXT NOT NULL,
+        subcontractor_id TEXT NOT NULL,
+        invited_at TEXT DEFAULT (datetime('now')),
+        invited_via TEXT DEFAULT 'email',
+        status TEXT DEFAULT 'pending',
+        viewed_at TEXT,
+        declined_at TEXT,
+        decline_reason TEXT,
+        notes TEXT
+      )`,
+
+      // Subcontractor Bids
+      `CREATE TABLE IF NOT EXISTS subcontractor_bids (
+        id TEXT PRIMARY KEY,
+        bid_package_id TEXT NOT NULL,
+        subcontractor_id TEXT NOT NULL,
+        base_bid REAL NOT NULL,
+        labor_cost REAL,
+        material_cost REAL,
+        equipment_cost REAL,
+        overhead_profit REAL,
+        alternates TEXT,
+        assumptions TEXT,
+        clarifications TEXT,
+        exclusions TEXT,
+        proposed_start TEXT,
+        proposed_duration TEXT,
+        lead_time TEXT,
+        compliance_verified INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'submitted',
+        score INTEGER,
+        evaluator_notes TEXT,
+        attachments TEXT,
+        submitted_at TEXT DEFAULT (datetime('now')),
+        reviewed_at TEXT
+      )`,
+
+      // Bid RFIs
+      `CREATE TABLE IF NOT EXISTS bid_rfis (
+        id TEXT PRIMARY KEY,
+        bid_package_id TEXT NOT NULL,
+        subcontractor_id TEXT,
+        rfi_number TEXT,
+        question TEXT NOT NULL,
+        response TEXT,
+        responded_at TEXT,
+        is_public INTEGER DEFAULT 1,
+        attachments TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Sections
+      `CREATE TABLE IF NOT EXISTS estimate_sections (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        cost_code TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Line Items (Enhanced)
+      `CREATE TABLE IF NOT EXISTS estimate_line_items (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        section_id TEXT,
+        cost_code_id TEXT,
+        bid_package_id TEXT,
+        description TEXT NOT NULL,
+        quantity REAL DEFAULT 1,
+        unit TEXT,
+        unit_price REAL DEFAULT 0,
+        labor_cost REAL DEFAULT 0,
+        labor_hours REAL,
+        labor_rate REAL,
+        material_cost REAL DEFAULT 0,
+        equipment_cost REAL DEFAULT 0,
+        subcontractor_cost REAL DEFAULT 0,
+        subtotal REAL DEFAULT 0,
+        markup_percent REAL DEFAULT 0,
+        markup_amount REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        is_optional INTEGER DEFAULT 0,
+        is_allowance INTEGER DEFAULT 0,
+        is_alternate INTEGER DEFAULT 0,
+        alternate_type TEXT,
+        include_in_sov INTEGER DEFAULT 1,
+        sov_description TEXT,
+        sort_order INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Allowances
+      `CREATE TABLE IF NOT EXISTS estimate_allowances (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        cost_code_id TEXT,
+        is_owner_selection INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'pending',
+        actual_amount REAL,
+        variance REAL,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Alternates
+      `CREATE TABLE IF NOT EXISTS estimate_alternates (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        alternate_number TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        cost_code_id TEXT,
+        status TEXT DEFAULT 'proposed',
+        accepted_at TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Contingency
+      `CREATE TABLE IF NOT EXISTS estimate_contingency (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        name TEXT DEFAULT 'Contingency',
+        description TEXT,
+        type TEXT DEFAULT 'percent',
+        percent_value REAL,
+        fixed_value REAL,
+        calculated_amount REAL,
+        applies_to TEXT DEFAULT 'all',
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Estimate Overhead & Profit
+      `CREATE TABLE IF NOT EXISTS estimate_overhead_profit (
+        id TEXT PRIMARY KEY,
+        estimate_id TEXT NOT NULL,
+        overhead_percent REAL DEFAULT 0,
+        overhead_amount REAL DEFAULT 0,
+        profit_percent REAL DEFAULT 0,
+        profit_amount REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Schedule of Values
+      `CREATE TABLE IF NOT EXISTS schedule_of_values (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        estimate_id TEXT,
+        user_id TEXT NOT NULL,
+        name TEXT DEFAULT 'Schedule of Values',
+        version INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'draft',
+        total_contract_amount REAL DEFAULT 0,
+        approved_at TEXT,
+        approved_by TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // SOV Line Items
+      `CREATE TABLE IF NOT EXISTS sov_line_items (
+        id TEXT PRIMARY KEY,
+        sov_id TEXT NOT NULL,
+        line_number TEXT,
+        cost_code_id TEXT,
+        description TEXT NOT NULL,
+        scheduled_value REAL NOT NULL DEFAULT 0,
+        approved_changes REAL DEFAULT 0,
+        revised_value REAL DEFAULT 0,
+        previous_billed REAL DEFAULT 0,
+        current_billed REAL DEFAULT 0,
+        total_billed REAL DEFAULT 0,
+        percent_complete REAL DEFAULT 0,
+        balance_to_finish REAL DEFAULT 0,
+        retainage_percent REAL DEFAULT 10,
+        retainage_held REAL DEFAULT 0,
+        estimate_line_item_id TEXT,
+        sort_order INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Phase 1 Indexes
+      `CREATE INDEX IF NOT EXISTS idx_cost_codes_code ON cost_codes(code)`,
+      `CREATE INDEX IF NOT EXISTS idx_cost_codes_division ON cost_codes(division)`,
+      `CREATE INDEX IF NOT EXISTS idx_subcontractors_user_id ON subcontractors(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_subcontractors_trade ON subcontractors(primary_trade)`,
+      `CREATE INDEX IF NOT EXISTS idx_bid_packages_job_id ON bid_packages(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_bid_packages_status ON bid_packages(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_sub_bids_package ON subcontractor_bids(bid_package_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sub_bids_subcontractor ON subcontractor_bids(subcontractor_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_line_items_estimate ON estimate_line_items(estimate_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_line_items_section ON estimate_line_items(section_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sov_job_id ON schedule_of_values(job_id)`,
+
+      // =====================================================
+      // MULTI-INDUSTRY SUPPORT
+      // =====================================================
+
+      // Industry Profiles (Master Configuration)
+      `CREATE TABLE IF NOT EXISTS industry_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT,
+        color TEXT,
+        enabled_modules TEXT,
+        disabled_modules TEXT,
+        required_fields TEXT,
+        hidden_fields TEXT,
+        terminology TEXT,
+        default_settings TEXT,
+        sort_order INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // User Industry Settings
+      `CREATE TABLE IF NOT EXISTS user_industry_settings (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        industry_id TEXT NOT NULL,
+        custom_terminology TEXT,
+        custom_settings TEXT,
+        onboarding_completed INTEGER DEFAULT 0,
+        onboarding_step TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // =====================================================
+      // PROPERTY MANAGEMENT TABLES
+      // =====================================================
+
+      // Units (Sub-locations within properties)
+      `CREATE TABLE IF NOT EXISTS units (
+        id TEXT PRIMARY KEY,
+        property_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        unit_number TEXT NOT NULL,
+        unit_type TEXT,
+        floor INTEGER,
+        square_footage REAL,
+        bedrooms INTEGER,
+        bathrooms REAL,
+        status TEXT DEFAULT 'vacant',
+        current_tenant_id TEXT,
+        current_lease_id TEXT,
+        market_rent REAL,
+        current_rent REAL,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Tenants
+      `CREATE TABLE IF NOT EXISTS tenants (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT,
+        company_name TEXT,
+        email TEXT,
+        phone TEXT,
+        mobile TEXT,
+        emergency_contact_name TEXT,
+        emergency_contact_phone TEXT,
+        status TEXT DEFAULT 'prospect',
+        credit_score INTEGER,
+        background_check_date TEXT,
+        background_check_status TEXT,
+        preferred_contact_method TEXT,
+        communication_opt_in INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Leases
+      `CREATE TABLE IF NOT EXISTS leases (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        unit_id TEXT,
+        tenant_id TEXT NOT NULL,
+        lease_type TEXT DEFAULT 'fixed',
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        monthly_rent REAL NOT NULL,
+        security_deposit REAL,
+        pet_deposit REAL,
+        rent_due_day INTEGER DEFAULT 1,
+        late_fee_amount REAL,
+        late_fee_grace_days INTEGER DEFAULT 5,
+        status TEXT DEFAULT 'draft',
+        move_in_date TEXT,
+        move_out_date TEXT,
+        move_in_inspection_id TEXT,
+        move_out_inspection_id TEXT,
+        lease_document_url TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Work Orders (Service Requests for PM)
+      `CREATE TABLE IF NOT EXISTS work_orders (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        unit_id TEXT,
+        tenant_id TEXT,
+        work_order_number TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        category TEXT,
+        priority TEXT DEFAULT 'normal',
+        sla_response_hours INTEGER,
+        sla_completion_hours INTEGER,
+        status TEXT DEFAULT 'new',
+        assigned_vendor_id TEXT,
+        assigned_at TEXT,
+        scheduled_date TEXT,
+        scheduled_time_start TEXT,
+        scheduled_time_end TEXT,
+        access_instructions TEXT,
+        permission_to_enter INTEGER DEFAULT 0,
+        completed_at TEXT,
+        completed_by TEXT,
+        resolution_notes TEXT,
+        not_to_exceed REAL,
+        actual_cost REAL,
+        labor_cost REAL,
+        parts_cost REAL,
+        billable_to TEXT,
+        invoice_id TEXT,
+        asset_id TEXT,
+        photos TEXT,
+        tenant_rating INTEGER,
+        tenant_feedback TEXT,
+        reported_at TEXT DEFAULT (datetime('now')),
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Vendor Rate Cards
+      `CREATE TABLE IF NOT EXISTS vendor_rate_cards (
+        id TEXT PRIMARY KEY,
+        vendor_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        service_name TEXT NOT NULL,
+        service_category TEXT,
+        rate_type TEXT DEFAULT 'flat',
+        flat_rate REAL,
+        hourly_rate REAL,
+        minimum_charge REAL,
+        after_hours_rate REAL,
+        emergency_rate REAL,
+        effective_date TEXT,
+        expiration_date TEXT,
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Assets (Trackable equipment at properties)
+      `CREATE TABLE IF NOT EXISTS assets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        property_id TEXT,
+        unit_id TEXT,
+        name TEXT NOT NULL,
+        asset_tag TEXT,
+        serial_number TEXT,
+        category TEXT,
+        subcategory TEXT,
+        brand TEXT,
+        model TEXT,
+        year_installed INTEGER,
+        location_description TEXT,
+        status TEXT DEFAULT 'active',
+        condition TEXT DEFAULT 'good',
+        purchase_date TEXT,
+        purchase_cost REAL,
+        warranty_expiry TEXT,
+        expected_lifespan_years INTEGER,
+        replacement_cost REAL,
+        last_service_date TEXT,
+        next_service_date TEXT,
+        maintenance_schedule_id TEXT,
+        documents TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Asset History
+      `CREATE TABLE IF NOT EXISTS asset_history (
+        id TEXT PRIMARY KEY,
+        asset_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        event_date TEXT NOT NULL,
+        description TEXT,
+        performed_by TEXT,
+        vendor_id TEXT,
+        work_order_id TEXT,
+        cost REAL,
+        condition_before TEXT,
+        condition_after TEXT,
+        documents TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Maintenance Schedules (Preventative maintenance)
+      `CREATE TABLE IF NOT EXISTS maintenance_schedules (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        property_id TEXT,
+        unit_id TEXT,
+        asset_id TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT,
+        frequency_type TEXT NOT NULL,
+        frequency_interval INTEGER,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        last_completed TEXT,
+        next_due TEXT,
+        default_vendor_id TEXT,
+        estimated_cost REAL,
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Rent Charges
+      `CREATE TABLE IF NOT EXISTS rent_charges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        lease_id TEXT NOT NULL,
+        charge_type TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        charge_date TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        period_start TEXT,
+        period_end TEXT,
+        status TEXT DEFAULT 'pending',
+        amount_paid REAL DEFAULT 0,
+        paid_date TEXT,
+        payment_method TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )`,
+
+      // Multi-industry indexes
+      `CREATE INDEX IF NOT EXISTS idx_user_industry_user_id ON user_industry_settings(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_units_property_id ON units(property_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_units_user_id ON units(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_units_status ON units(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenants_user_id ON tenants(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_leases_user_id ON leases(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_leases_property_id ON leases(property_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_leases_tenant_id ON leases(tenant_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_leases_status ON leases(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_work_orders_user_id ON work_orders(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_work_orders_property_id ON work_orders(property_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_work_orders_priority ON work_orders(priority)`,
+      `CREATE INDEX IF NOT EXISTS idx_work_orders_assigned_vendor ON work_orders(assigned_vendor_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_vendor_rate_cards_vendor_id ON vendor_rate_cards(vendor_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_vendor_rate_cards_user_id ON vendor_rate_cards(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_assets_property_id ON assets(property_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)`,
+      `CREATE INDEX IF NOT EXISTS idx_asset_history_asset_id ON asset_history(asset_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_asset_history_event_date ON asset_history(event_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_user_id ON maintenance_schedules(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_property_id ON maintenance_schedules(property_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_next_due ON maintenance_schedules(next_due)`,
+      `CREATE INDEX IF NOT EXISTS idx_rent_charges_user_id ON rent_charges(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_rent_charges_lease_id ON rent_charges(lease_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_rent_charges_status ON rent_charges(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_rent_charges_due_date ON rent_charges(due_date)`,
     ];
 
     // Execute each statement
@@ -748,6 +1354,109 @@ export async function POST() {
       await client.execute({
         sql: 'INSERT OR IGNORE INTO tool_categories (id, name, description, icon, color) VALUES (?, ?, ?, ?, ?)',
         args: [id, name, description, icon, color],
+      });
+    }
+
+    // Insert default CSI MasterFormat divisions
+    const csiDivisions = [
+      ['csi_00', '00', '00', 'Procurement and Contracting Requirements'],
+      ['csi_01', '01', '01', 'General Requirements'],
+      ['csi_02', '02', '02', 'Existing Conditions'],
+      ['csi_03', '03', '03', 'Concrete'],
+      ['csi_04', '04', '04', 'Masonry'],
+      ['csi_05', '05', '05', 'Metals'],
+      ['csi_06', '06', '06', 'Wood, Plastics, and Composites'],
+      ['csi_07', '07', '07', 'Thermal and Moisture Protection'],
+      ['csi_08', '08', '08', 'Openings'],
+      ['csi_09', '09', '09', 'Finishes'],
+      ['csi_10', '10', '10', 'Specialties'],
+      ['csi_11', '11', '11', 'Equipment'],
+      ['csi_12', '12', '12', 'Furnishings'],
+      ['csi_13', '13', '13', 'Special Construction'],
+      ['csi_14', '14', '14', 'Conveying Equipment'],
+      ['csi_21', '21', '21', 'Fire Suppression'],
+      ['csi_22', '22', '22', 'Plumbing'],
+      ['csi_23', '23', '23', 'HVAC'],
+      ['csi_25', '25', '25', 'Integrated Automation'],
+      ['csi_26', '26', '26', 'Electrical'],
+      ['csi_27', '27', '27', 'Communications'],
+      ['csi_28', '28', '28', 'Electronic Safety and Security'],
+      ['csi_31', '31', '31', 'Earthwork'],
+      ['csi_32', '32', '32', 'Exterior Improvements'],
+      ['csi_33', '33', '33', 'Utilities'],
+    ];
+
+    for (const [id, code, division, name] of csiDivisions) {
+      await client.execute({
+        sql: 'INSERT OR IGNORE INTO cost_codes (id, code, division, name, level, is_default) VALUES (?, ?, ?, ?, 1, 1)',
+        args: [id, code, division, name],
+      });
+    }
+
+    // Insert industry profiles (for multi-industry support)
+    const industryProfilesData = [
+      {
+        id: 'gc',
+        name: 'General Contractor',
+        description: 'Commercial and residential general contracting',
+        icon: 'building',
+        color: '#3b82f6',
+        enabled_modules: JSON.stringify(['jobs', 'estimates', 'sov', 'bid_packages', 'subcontractors', 'change_orders', 'permits', 'time_tracking', 'expenses']),
+        terminology: JSON.stringify({ location: 'Job', sub_location: 'Phase', service_provider: 'Subcontractor', stakeholder: 'Client' }),
+        default_settings: JSON.stringify({ default_retainage: 10, default_markup: 15 }),
+        sort_order: 1,
+      },
+      {
+        id: 'property_mgmt',
+        name: 'Property Management',
+        description: 'Residential and commercial property management',
+        icon: 'home',
+        color: '#10b981',
+        enabled_modules: JSON.stringify(['properties', 'units', 'tenants', 'leases', 'work_orders', 'vendors', 'assets', 'maintenance_schedules', 'rent_tracking']),
+        terminology: JSON.stringify({ location: 'Property', sub_location: 'Unit', service_provider: 'Vendor', stakeholder: 'Tenant' }),
+        default_settings: JSON.stringify({ default_late_fee_percent: 5, default_late_grace_days: 5 }),
+        sort_order: 2,
+      },
+      {
+        id: 'trade_contractor',
+        name: 'Trade Contractor',
+        description: 'Electrical, plumbing, HVAC, and specialty trades',
+        icon: 'wrench',
+        color: '#f59e0b',
+        enabled_modules: JSON.stringify(['jobs', 'estimates', 'time_tracking', 'expenses', 'service_calls', 'inventory']),
+        terminology: JSON.stringify({ location: 'Job', sub_location: 'Task', service_provider: 'Supplier', stakeholder: 'Customer' }),
+        default_settings: JSON.stringify({ default_hourly_rate: 85, default_service_call_fee: 75 }),
+        sort_order: 3,
+      },
+      {
+        id: 'developer',
+        name: 'Developer / Owner-Builder',
+        description: 'Real estate development and owner-builder projects',
+        icon: 'layers',
+        color: '#8b5cf6',
+        enabled_modules: JSON.stringify(['projects', 'estimates', 'sov', 'bid_packages', 'subcontractors', 'financing', 'permits', 'milestones']),
+        terminology: JSON.stringify({ location: 'Project', sub_location: 'Phase', service_provider: 'Contractor', stakeholder: 'Investor' }),
+        default_settings: JSON.stringify({ default_contingency: 10, default_profit_margin: 20 }),
+        sort_order: 4,
+      },
+    ];
+
+    for (const profile of industryProfilesData) {
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO industry_profiles
+              (id, name, description, icon, color, enabled_modules, terminology, default_settings, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          profile.id,
+          profile.name,
+          profile.description,
+          profile.icon,
+          profile.color,
+          profile.enabled_modules,
+          profile.terminology,
+          profile.default_settings,
+          profile.sort_order,
+        ],
       });
     }
 

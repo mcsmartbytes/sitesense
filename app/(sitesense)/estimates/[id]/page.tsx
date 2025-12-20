@@ -1,17 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Navigation from '@/components/Navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Estimate = { id: string; job_id: string; notes: string | null; status: string; subtotal: number; tax: number; total: number; public_token: string; po_number: string | null };
-type Item = { id: string; description: string; qty: number; unit_price: number; is_optional: boolean };
+type Item = { id: string; description: string; qty: number; unit_price: number; is_optional: boolean; cost_code?: string | null; cost_code_name?: string | null; labor_cost?: number; material_cost?: number; equipment_cost?: number };
 type Attachment = { id: string; url: string; kind: string };
 
 export default function EstimateDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -21,7 +22,39 @@ export default function EstimateDetailPage() {
   const [toEmail, setToEmail] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [generatingSov, setGeneratingSov] = useState(false);
   const publicUrl = useMemo(() => estimate ? `${location.origin}/estimates/public/${estimate.public_token}` : '', [estimate]);
+
+  async function generateSov() {
+    if (!estimate || !user?.id) return;
+    if (!confirm('Generate a Schedule of Values from this estimate?')) return;
+
+    setGeneratingSov(true);
+    try {
+      const res = await fetch('/api/sov', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          job_id: estimate.job_id,
+          estimate_id: estimate.id,
+          name: `SOV - ${estimate.po_number || 'Estimate'}`,
+          generate_from_estimate: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        router.push(`/sov/${data.data.id}`);
+      } else {
+        alert(data.error || 'Failed to generate SOV');
+      }
+    } catch (err) {
+      console.error('Error generating SOV:', err);
+      alert('Failed to generate SOV');
+    } finally {
+      setGeneratingSov(false);
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -101,9 +134,21 @@ export default function EstimateDetailPage() {
             )}
           </div>
           <div className="text-right space-y-2">
-            <button onClick={() => { navigator.clipboard.writeText(publicUrl); alert('Public link copied'); }} className="px-3 py-2 bg-blue-600 text-white rounded">Copy Public Link</button>
+            <Link href={`/estimates/${estimate.id}/edit`} className="inline-block px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Edit Estimate</Link>
             <div>
-              <button onClick={() => setSendOpen(true)} className="mt-2 px-3 py-2 bg-emerald-600 text-white rounded">Send Estimate</button>
+              <button onClick={() => { navigator.clipboard.writeText(publicUrl); alert('Public link copied'); }} className="mt-2 px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Copy Public Link</button>
+            </div>
+            <div>
+              <button onClick={() => setSendOpen(true)} className="mt-2 px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Send Estimate</button>
+            </div>
+            <div>
+              <button
+                onClick={generateSov}
+                disabled={generatingSov}
+                className="mt-2 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+              >
+                {generatingSov ? 'Generating...' : 'Generate SOV'}
+              </button>
             </div>
             <div>
               <a href={`/api/estimates/${estimate.id}/pdf`} target="_blank" className="inline-block mt-2 px-3 py-2 bg-gray-700 text-white rounded">Download PDF</a>
@@ -115,28 +160,36 @@ export default function EstimateDetailPage() {
         <div className="bg-white rounded-lg shadow p-6 space-y-6">
           <div>
             <h2 className="font-semibold text-gray-900 mb-2">Line Items</h2>
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left">Description</th>
-                  <th className="px-3 py-2 text-right">Qty</th>
-                  <th className="px-3 py-2 text-right">Unit Price</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
-                  <th className="px-3 py-2 text-right">Optional</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((i) => (
-                  <tr key={i.id} className="border-t">
-                    <td className="px-3 py-2">{i.description}</td>
-                    <td className="px-3 py-2 text-right">{i.qty.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">${i.unit_price.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">${(i.qty * i.unit_price).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">{i.is_optional ? 'Yes' : 'No'}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Cost Code</th>
+                    <th className="px-3 py-2 text-left">Description</th>
+                    <th className="px-3 py-2 text-right">Qty</th>
+                    <th className="px-3 py-2 text-right">Unit Price</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2 text-center">Optional</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((i) => (
+                    <tr key={i.id} className="border-t">
+                      <td className="px-3 py-2 font-mono text-gray-600 text-xs">
+                        {i.cost_code || '-'}
+                      </td>
+                      <td className="px-3 py-2">{i.description}</td>
+                      <td className="px-3 py-2 text-right">{i.qty.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right">${i.unit_price.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-medium">${(i.qty * i.unit_price).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center">
+                        {i.is_optional && <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs">Optional</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {attachments.length > 0 && (
