@@ -424,6 +424,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
     { href: '/bid-packages', label: 'Bid Packages', description: 'Manage trade scopes' },
     { href: '/subcontractors', label: 'Subcontractors', description: 'Sub compliance & bids' },
     { href: '/cost-codes', label: 'Cost Codes', description: 'CSI MasterFormat codes' },
+    { href: '/properties', label: 'Properties', description: 'Units, tenants, leases' },
     { href: '/time-tracking', label: 'Time Tracking', description: 'Log hours worked' },
     { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules' },
   ];
@@ -630,6 +631,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
                   <Link href="/bid-packages" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Bid Packages</Link>
                   <Link href="/subcontractors" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Subcontractors</Link>
                   <Link href="/cost-codes" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Cost Codes</Link>
+                  <Link href="/properties" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Properties</Link>
                   <Link href="/time-tracking" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Time Tracking</Link>
                   <Link href="/crew" className="block py-1.5 pl-3 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Team & Crew</Link>
                 </div>
