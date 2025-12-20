@@ -100,6 +100,98 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Update custom cost code
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, code, division, name, description, parent_code, level } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Cost code ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const client = getTurso();
+
+    // Check if it's a custom code (can only edit custom codes)
+    const check = await client.execute({
+      sql: 'SELECT is_default FROM cost_codes WHERE id = ?',
+      args: [id],
+    });
+
+    if (check.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Cost code not found' },
+        { status: 404 }
+      );
+    }
+
+    if ((check.rows[0] as any).is_default) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot edit default cost codes' },
+        { status: 400 }
+      );
+    }
+
+    const fields: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (code !== undefined) {
+      fields.push('code = ?');
+      values.push(code);
+    }
+    if (division !== undefined) {
+      fields.push('division = ?');
+      values.push(division);
+    }
+    if (name !== undefined) {
+      fields.push('name = ?');
+      values.push(name);
+    }
+    if (description !== undefined) {
+      fields.push('description = ?');
+      values.push(description);
+    }
+    if (parent_code !== undefined) {
+      fields.push('parent_code = ?');
+      values.push(parent_code);
+    }
+    if (level !== undefined) {
+      fields.push('level = ?');
+      values.push(level);
+    }
+
+    if (fields.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    values.push(id);
+
+    await client.execute({
+      sql: `UPDATE cost_codes SET ${fields.join(', ')} WHERE id = ?`,
+      args: values,
+    });
+
+    const result = await client.execute({
+      sql: 'SELECT * FROM cost_codes WHERE id = ?',
+      args: [id],
+    });
+
+    return NextResponse.json({ success: true, data: result.rows[0] });
+  } catch (error: any) {
+    console.error('Error updating cost code:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Delete custom cost code
 export async function DELETE(request: NextRequest) {
   try {
