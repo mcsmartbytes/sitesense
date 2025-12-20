@@ -475,6 +475,13 @@ function SettingsPageContent() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Links</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Link
+              href="/settings/industry"
+              className="p-4 border dark:border-gray-700 rounded-lg text-center hover:bg-gray-50 dark:hover:bg-gray-700 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20"
+            >
+              <p className="font-medium text-blue-600 dark:text-blue-400">Industry</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Configure modules</p>
+            </Link>
+            <Link
               href="/jobs"
               className="p-4 border dark:border-gray-700 rounded-lg text-center hover:bg-gray-50 dark:hover:bg-gray-700"
             >
@@ -494,13 +501,6 @@ function SettingsPageContent() {
             >
               <p className="font-medium text-gray-900 dark:text-white">Estimates</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">Create bids</p>
-            </Link>
-            <Link
-              href="/reports"
-              className="p-4 border dark:border-gray-700 rounded-lg text-center hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <p className="font-medium text-gray-900 dark:text-white">Reports</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">View analytics</p>
             </Link>
           </div>
         </section>

@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import InstallPrompt from '@/components/InstallPrompt'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { IndustryProvider } from '@/contexts/IndustryContext'
 
 export const metadata: Metadata = {
   title: 'SiteSense',
@@ -48,8 +49,10 @@ export default function RootLayout({
       </head>
       <body>
         <AuthProvider>
-          {children}
-          <InstallPrompt />
+          <IndustryProvider>
+            {children}
+            <InstallPrompt />
+          </IndustryProvider>
         </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
