@@ -30,6 +30,21 @@ type IndustryContextType = {
 
 const IndustryContext = createContext<IndustryContextType | undefined>(undefined);
 
+// Default modules shown when no industry is selected (GC-focused)
+const DEFAULT_ENABLED_MODULES = [
+  'jobs',
+  'estimates',
+  'sov',
+  'bid_packages',
+  'subcontractors',
+  'cost_codes',
+  'crews',
+  'daily_logs',
+];
+
+// Modules that require specific industry selection
+const INDUSTRY_SPECIFIC_MODULES = ['units', 'tenants', 'leases', 'work_orders', 'rent_roll'];
+
 export function IndustryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [settings, setSettings] = useState<IndustrySettings | null>(null);
@@ -81,7 +96,14 @@ export function IndustryProvider({ children }: { children: ReactNode }) {
   }
 
   function isModuleEnabled(module: string): boolean {
-    if (!settings) return true; // Default to enabled if no settings
+    if (!settings) {
+      // No industry selected yet - show GC-focused modules by default
+      // Hide industry-specific modules like Property Management features
+      if (INDUSTRY_SPECIFIC_MODULES.includes(module)) {
+        return false;
+      }
+      return DEFAULT_ENABLED_MODULES.includes(module) || !INDUSTRY_SPECIFIC_MODULES.includes(module);
+    }
     return settings.enabled_modules.includes(module);
   }
 
