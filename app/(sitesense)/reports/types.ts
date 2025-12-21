@@ -1,9 +1,7 @@
 // Financial Report Types
 export type FinancialSummary = {
   total_expenses: number;
-  total_budgeted: number;
-  total_mileage_value: number;
-  total_time_labor_cost: number;
+  total_labor_cost: number;
 };
 
 export type CategoryExpense = {
@@ -19,12 +17,11 @@ export type MonthlyExpense = {
   amount: number;
 };
 
-export type BudgetVsActual = {
-  category_id: string;
-  category_name: string;
-  budget: number;
-  actual: number;
-  percent_used: number;
+export type JobExpense = {
+  job_id: string;
+  job_name: string;
+  amount: number;
+  count: number;
 };
 
 export type TopVendor = {
@@ -37,7 +34,7 @@ export type FinancialReportData = {
   summary: FinancialSummary;
   expenses_by_category: CategoryExpense[];
   expenses_by_month: MonthlyExpense[];
-  budget_vs_actual: BudgetVsActual[];
+  expenses_by_job: JobExpense[];
   top_vendors: TopVendor[];
 };
 

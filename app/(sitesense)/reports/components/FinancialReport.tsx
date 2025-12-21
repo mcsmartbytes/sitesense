@@ -107,7 +107,7 @@ export default function FinancialReport({ dateRange }: FinancialReportProps) {
     color: cat.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length],
   }));
 
-  const variance = data.summary.total_budgeted - data.summary.total_expenses;
+  const totalCosts = data.summary.total_expenses + data.summary.total_labor_cost;
 
   return (
     <div>
@@ -122,28 +122,23 @@ export default function FinancialReport({ dateRange }: FinancialReportProps) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         <StatCard
           label="Total Expenses"
           value={formatCurrency(data.summary.total_expenses)}
           color="default"
         />
         <StatCard
-          label="Total Budgeted"
-          value={formatCurrency(data.summary.total_budgeted)}
+          label="Labor Cost"
+          value={formatCurrency(data.summary.total_labor_cost)}
           color="blue"
+          subtext="From time entries"
         />
         <StatCard
-          label="Budget Variance"
-          value={formatCurrency(Math.abs(variance))}
-          color={variance >= 0 ? 'green' : 'red'}
-          subtext={variance >= 0 ? 'Under budget' : 'Over budget'}
-        />
-        <StatCard
-          label="Mileage Value"
-          value={formatCurrency(data.summary.total_mileage_value)}
+          label="Total Costs"
+          value={formatCurrency(totalCosts)}
           color="default"
-          subtext="@ $0.67/mile"
+          subtext="Expenses + Labor"
         />
       </div>
 
@@ -182,16 +177,15 @@ export default function FinancialReport({ dateRange }: FinancialReportProps) {
         </div>
       </div>
 
-      {/* Budget vs Actual */}
-      {data.budget_vs_actual.length > 0 && (
+      {/* Expenses by Job */}
+      {data.expenses_by_job.length > 0 && (
         <div className="bg-white rounded-lg shadow p-5 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Budget vs Actual</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Expenses by Job</h3>
           <BarChartWrapper
-            data={data.budget_vs_actual}
-            xKey="category_name"
+            data={data.expenses_by_job}
+            xKey="job_name"
             bars={[
-              { dataKey: 'budget', name: 'Budget', color: '#3b82f6' },
-              { dataKey: 'actual', name: 'Actual', color: '#10b981' },
+              { dataKey: 'amount', name: 'Amount', color: '#3b82f6' },
             ]}
             height={300}
             formatValue={formatCurrency}

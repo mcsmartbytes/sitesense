@@ -31,32 +31,14 @@ export async function GET(request: NextRequest) {
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
 
-    // Get total budgeted
-    const budgetResult = await client.execute({
-      sql: 'SELECT COALESCE(SUM(amount), 0) as total_budgeted FROM budgets WHERE user_id = ?',
-      args: [userId],
-    });
-
-    // Get mileage value (if exists)
-    const mileageResult = await client.execute({
-      sql: `
-        SELECT COALESCE(SUM(distance * 0.67), 0) as total_mileage_value
-        FROM mileage
-        WHERE user_id = ?
-        ${startDate ? 'AND date >= ?' : ''}
-        ${endDate ? 'AND date <= ?' : ''}
-      `,
-      args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
-    });
-
     // Get labor cost from time entries
     const laborResult = await client.execute({
       sql: `
-        SELECT COALESCE(SUM(hours * hourly_rate), 0) as total_labor_cost
+        SELECT COALESCE(SUM(hours * COALESCE(hourly_rate, 0)), 0) as total_labor_cost
         FROM time_entries
         WHERE user_id = ?
-        ${startDate ? 'AND date >= ?' : ''}
-        ${endDate ? 'AND date <= ?' : ''}
+        ${startDate ? 'AND entry_date >= ?' : ''}
+        ${endDate ? 'AND entry_date <= ?' : ''}
       `,
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
@@ -97,28 +79,24 @@ export async function GET(request: NextRequest) {
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
 
-    // Get budget vs actual
-    const budgetVsActualResult = await client.execute({
+    // Get expenses by job
+    const byJobResult = await client.execute({
       sql: `
         SELECT
-          b.category_id,
-          c.name as category_name,
-          b.amount as budget,
-          COALESCE(
-            (SELECT SUM(e.amount)
-             FROM expenses e
-             WHERE e.category_id = b.category_id
-               AND e.user_id = b.user_id
-               ${startDate ? 'AND e.date >= ?' : ''}
-               ${endDate ? 'AND e.date <= ?' : ''}
-            ), 0
-          ) as actual
-        FROM budgets b
-        LEFT JOIN categories c ON b.category_id = c.id
-        WHERE b.user_id = ?
-        ORDER BY b.amount DESC
+          COALESCE(j.id, 'unassigned') as job_id,
+          COALESCE(j.name, 'Unassigned') as job_name,
+          COALESCE(SUM(e.amount), 0) as amount,
+          COUNT(e.id) as count
+        FROM expenses e
+        LEFT JOIN jobs j ON e.job_id = j.id
+        WHERE e.user_id = ?
+        ${startDate ? 'AND e.date >= ?' : ''}
+        ${endDate ? 'AND e.date <= ?' : ''}
+        GROUP BY COALESCE(j.id, 'unassigned'), COALESCE(j.name, 'Unassigned')
+        ORDER BY amount DESC
+        LIMIT 10
       `,
-      args: [...(startDate ? [startDate] : []), ...(endDate ? [endDate] : []), userId],
+      args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
 
     // Get top vendors
@@ -141,9 +119,7 @@ export async function GET(request: NextRequest) {
 
     const summary = {
       total_expenses: Number(summaryResult.rows[0]?.total_expenses) || 0,
-      total_budgeted: Number(budgetResult.rows[0]?.total_budgeted) || 0,
-      total_mileage_value: Number(mileageResult.rows[0]?.total_mileage_value) || 0,
-      total_time_labor_cost: Number(laborResult.rows[0]?.total_labor_cost) || 0,
+      total_labor_cost: Number(laborResult.rows[0]?.total_labor_cost) || 0,
     };
 
     const expenses_by_category = categoryResult.rows.map((row) => ({
@@ -159,17 +135,12 @@ export async function GET(request: NextRequest) {
       amount: Number(row.amount),
     }));
 
-    const budget_vs_actual = budgetVsActualResult.rows.map((row) => {
-      const budget = Number(row.budget);
-      const actual = Number(row.actual);
-      return {
-        category_id: String(row.category_id),
-        category_name: String(row.category_name),
-        budget,
-        actual,
-        percent_used: budget > 0 ? Math.round((actual / budget) * 100) : 0,
-      };
-    });
+    const expenses_by_job = byJobResult.rows.map((row) => ({
+      job_id: String(row.job_id),
+      job_name: String(row.job_name),
+      amount: Number(row.amount),
+      count: Number(row.count),
+    }));
 
     const top_vendors = vendorResult.rows.map((row) => ({
       vendor: String(row.vendor),
@@ -183,7 +154,7 @@ export async function GET(request: NextRequest) {
         summary,
         expenses_by_category,
         expenses_by_month,
-        budget_vs_actual,
+        expenses_by_job,
         top_vendors,
       },
     });
