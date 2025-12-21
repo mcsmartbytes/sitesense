@@ -1,10 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIndustry } from '@/contexts/IndustryContext';
 import Navigation from '@/components/Navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import DateRangePicker from './components/DateRangePicker';
+import FinancialReport from './components/FinancialReport';
+import EstimateReport from './components/EstimateReport';
+import SubcontractorReport from './components/SubcontractorReport';
+import LaborReport from './components/LaborReport';
+import PropertyReport from './components/PropertyReport';
+import { DateRange } from './types';
 
 type Job = {
   id: string;
@@ -23,13 +31,46 @@ type Tool = {
   purchase_price: number | null;
 };
 
+type TabId = 'jobs' | 'tools' | 'financial' | 'estimates' | 'subcontractors' | 'labor' | 'properties';
+
 function ReportsPageContent() {
   const { user } = useAuth();
+  const { isModuleEnabled } = useIndustry();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'jobs' | 'tools'>('jobs');
+  const [activeTab, setActiveTab] = useState<TabId>('jobs');
+
+  // Default date range: last 30 days
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+    };
+  });
+
+  // Define available tabs based on industry
+  const tabs = useMemo(() => {
+    const baseTabs: { id: TabId; label: string }[] = [
+      { id: 'jobs', label: 'Jobs' },
+      { id: 'tools', label: 'Tools' },
+      { id: 'financial', label: 'Financial' },
+      { id: 'estimates', label: 'Estimates' },
+      { id: 'subcontractors', label: 'Subcontractors' },
+      { id: 'labor', label: 'Time & Labor' },
+    ];
+
+    // Add properties tab if PM modules are enabled
+    if (isModuleEnabled('units') || isModuleEnabled('work_orders')) {
+      baseTabs.push({ id: 'properties', label: 'Properties' });
+    }
+
+    return baseTabs;
+  }, [isModuleEnabled]);
 
   useEffect(() => {
     if (user) {
@@ -118,6 +159,9 @@ function ReportsPageContent() {
     link.click();
   }
 
+  // Check if current tab needs date range
+  const showDateRange = ['financial', 'estimates', 'labor'].includes(activeTab);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -132,12 +176,12 @@ function ReportsPageContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation variant="sitesense" />
-      <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
             <p className="text-sm text-gray-600 mt-1">
-              Overview of your jobs and equipment
+              Analytics and insights across your business
             </p>
           </div>
           <Link href="/" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
@@ -152,59 +196,63 @@ function ReportsPageContent() {
           </div>
         )}
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-5">
-            <p className="text-sm text-gray-600">Total Jobs</p>
-            <p className="text-2xl font-bold text-gray-900">{jobs.length}</p>
+        {/* Date Range Picker (for applicable tabs) */}
+        {showDateRange && (
+          <div className="mb-6 bg-white rounded-lg shadow p-4">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
-          <div className="bg-white rounded-lg shadow p-5">
-            <p className="text-sm text-gray-600">Active Jobs</p>
-            <p className="text-2xl font-bold text-blue-600">{activeJobs}</p>
+        )}
+
+        {/* Summary Cards (for Jobs/Tools tabs) */}
+        {(activeTab === 'jobs' || activeTab === 'tools') && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-lg shadow p-5">
+              <p className="text-sm text-gray-600">Total Jobs</p>
+              <p className="text-2xl font-bold text-gray-900">{jobs.length}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-5">
+              <p className="text-sm text-gray-600">Active Jobs</p>
+              <p className="text-2xl font-bold text-blue-600">{activeJobs}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-5">
+              <p className="text-sm text-gray-600">Total Tools</p>
+              <p className="text-2xl font-bold text-gray-900">{totalTools}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow p-5">
+              <p className="text-sm text-gray-600">Equipment Value</p>
+              <p className="text-2xl font-bold text-green-600">${totalToolValue.toLocaleString()}</p>
+            </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-5">
-            <p className="text-sm text-gray-600">Total Tools</p>
-            <p className="text-2xl font-bold text-gray-900">{totalTools}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-5">
-            <p className="text-sm text-gray-600">Equipment Value</p>
-            <p className="text-2xl font-bold text-green-600">${totalToolValue.toLocaleString()}</p>
-          </div>
-        </div>
+        )}
 
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow">
-          <div className="border-b flex justify-between items-center">
+          <div className="border-b flex justify-between items-center overflow-x-auto">
             <nav className="flex -mb-px">
-              <button
-                onClick={() => setActiveTab('jobs')}
-                className={`px-6 py-3 border-b-2 font-medium text-sm ${
-                  activeTab === 'jobs'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Jobs Report
-              </button>
-              <button
-                onClick={() => setActiveTab('tools')}
-                className={`px-6 py-3 border-b-2 font-medium text-sm ${
-                  activeTab === 'tools'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Tools Report
-              </button>
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 sm:px-6 py-3 border-b-2 font-medium text-sm whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </nav>
-            <div className="pr-4">
-              <button
-                onClick={activeTab === 'jobs' ? exportJobsCSV : exportToolsCSV}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
-              >
-                Export CSV
-              </button>
-            </div>
+            {(activeTab === 'jobs' || activeTab === 'tools') && (
+              <div className="pr-4">
+                <button
+                  onClick={activeTab === 'jobs' ? exportJobsCSV : exportToolsCSV}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                >
+                  Export CSV
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="p-4">
@@ -329,6 +377,12 @@ function ReportsPageContent() {
                 )}
               </div>
             )}
+
+            {activeTab === 'financial' && <FinancialReport dateRange={dateRange} />}
+            {activeTab === 'estimates' && <EstimateReport dateRange={dateRange} />}
+            {activeTab === 'subcontractors' && <SubcontractorReport />}
+            {activeTab === 'labor' && <LaborReport dateRange={dateRange} />}
+            {activeTab === 'properties' && <PropertyReport />}
           </div>
         </div>
       </main>
