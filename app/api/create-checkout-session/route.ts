@@ -1,23 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// Lazy-initialize Stripe only when needed
+function getStripe(): Stripe | null {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return null;
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2023-10-16',
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const stripe = getStripe();
+
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Payments are not configured' },
+        { status: 503 }
+      );
+    }
+
     const { plan, interval, userId, email } = await req.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
 
-    const priceIds: Record<string, string> = {
-      'premium-month': process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID!,
-      'premium-year': process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID!,
-      'pro-month': process.env.STRIPE_PRO_MONTHLY_PRICE_ID!,
-      'pro-year': process.env.STRIPE_PRO_YEARLY_PRICE_ID!,
+    const priceIds: Record<string, string | undefined> = {
+      'premium-month': process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID,
+      'premium-year': process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID,
+      'pro-month': process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+      'pro-year': process.env.STRIPE_PRO_YEARLY_PRICE_ID,
     };
 
     const priceId = priceIds[`${plan}-${interval}`];

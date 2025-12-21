@@ -2,11 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getTurso } from '@/lib/turso';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// Lazy-initialize Stripe only when needed
+function getStripe(): Stripe | null {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return null;
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2023-10-16',
+  });
+}
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
+
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Payments are not configured' },
+      { status: 503 }
+    );
+  }
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json(
+      { error: 'Webhook secret not configured' },
+      { status: 503 }
+    );
+  }
+
   const body = await req.text();
   const signature = req.headers.get('stripe-signature')!;
 
@@ -16,7 +38,7 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err: any) {
     console.error('Webhook error:', err.message);
@@ -29,7 +51,7 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        await handleCheckoutComplete(session);
+        await handleCheckoutComplete(session, stripe);
         break;
       }
 
@@ -63,7 +85,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
+async function handleCheckoutComplete(session: Stripe.Checkout.Session, stripe: Stripe) {
   const client = getTurso();
   const userId = session.metadata?.user_id;
   const customerId = session.customer as string;
