@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
           COUNT(DISTINCT job_id) as jobs_with_time
         FROM time_entries
         WHERE user_id = ?
-        ${startDate ? 'AND date >= ?' : ''}
-        ${endDate ? 'AND date <= ?' : ''}
+        ${startDate ? 'AND entry_date >= ?' : ''}
+        ${endDate ? 'AND entry_date <= ?' : ''}
       `,
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
@@ -44,8 +44,8 @@ export async function GET(request: NextRequest) {
         FROM time_entries t
         LEFT JOIN jobs j ON t.job_id = j.id
         WHERE t.user_id = ?
-        ${startDate ? 'AND t.date >= ?' : ''}
-        ${endDate ? 'AND t.date <= ?' : ''}
+        ${startDate ? 'AND t.entry_date >= ?' : ''}
+        ${endDate ? 'AND t.entry_date <= ?' : ''}
         GROUP BY t.job_id, j.name
         ORDER BY hours DESC
         LIMIT 15
@@ -57,14 +57,14 @@ export async function GET(request: NextRequest) {
     const monthlyResult = await client.execute({
       sql: `
         SELECT
-          strftime('%Y-%m', date) as month,
+          strftime('%Y-%m', entry_date) as month,
           SUM(hours) as hours,
           SUM(hours * hourly_rate) as cost
         FROM time_entries
         WHERE user_id = ?
-        ${startDate ? 'AND date >= ?' : ''}
-        ${endDate ? 'AND date <= ?' : ''}
-        GROUP BY strftime('%Y-%m', date)
+        ${startDate ? 'AND entry_date >= ?' : ''}
+        ${endDate ? 'AND entry_date <= ?' : ''}
+        GROUP BY strftime('%Y-%m', entry_date)
         ORDER BY month
       `,
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
