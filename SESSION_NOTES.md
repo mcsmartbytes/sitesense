@@ -1,166 +1,206 @@
-# SiteSense Session Notes - December 17, 2025
+# SiteSense Session Notes
+
+## Latest Session: December 20, 2025
+
+### What We Built: Reports Expansion
+
+Expanded the reports page from 2 tabs to 7 tabs with data visualizations using **recharts**.
+
+**New Report Tabs:**
+1. **Financial** - Expense breakdown by category/job, monthly trends, top vendors
+2. **Estimates** - Win rate, status breakdown, monthly volume
+3. **Subcontractors** - Compliance scoring, document expiry alerts, by-trade breakdown
+4. **Time & Labor** - Hours by job, labor costs, monthly trends
+5. **Properties** - Occupancy, work orders, lease expirations (PM industry only)
+6. Jobs (existing)
+7. Tools (existing)
+
+**Files Created:**
+```
+app/(sitesense)/reports/types.ts                    # Type definitions
+app/(sitesense)/reports/components/StatCard.tsx     # Summary stat card
+app/(sitesense)/reports/components/DateRangePicker.tsx
+app/(sitesense)/reports/components/BarChartWrapper.tsx
+app/(sitesense)/reports/components/PieChartWrapper.tsx
+app/(sitesense)/reports/components/LineChartWrapper.tsx
+app/(sitesense)/reports/components/FinancialReport.tsx
+app/(sitesense)/reports/components/EstimateReport.tsx
+app/(sitesense)/reports/components/SubcontractorReport.tsx
+app/(sitesense)/reports/components/LaborReport.tsx
+app/(sitesense)/reports/components/PropertyReport.tsx
+app/api/reports/financial/route.ts
+app/api/reports/estimates/route.ts
+app/api/reports/subcontractors/route.ts
+app/api/reports/labor/route.ts
+app/api/reports/properties/route.ts
+```
+
+### Bug Fixes This Session
+
+1. **Subcontractor report** - Changed `trade` to `primary_trade` (correct column name)
+2. **Financial/Labor reports** - Changed `entry_date` to `date` (actual DB column)
+3. **Financial report** - Removed non-existent `budgets` and `mileage` tables
+4. **Stripe integration** - Made optional (lazy initialization) so builds work without env vars
+
+### Schema vs Actual Database
+
+**Important:** The Drizzle schema (`db/schema.ts`) doesn't always match the actual database tables. The DB was created via `/api/db/init` SQL statements. When in doubt, check:
+- `/api/db/init/route.ts` - CREATE TABLE statements
+- Existing API routes - See what columns they INSERT/SELECT
+
+Known discrepancies:
+- `time_entries.date` (actual) vs `entry_date` (schema)
+- `subcontractors.primary_trade` (actual) vs `trade` (sometimes referenced)
+
+### PWA Status
+
+SiteSense is **already configured as a PWA**:
+- `public/manifest.json` - App manifest with shortcuts
+- `public/sw.js` - Service worker with offline caching
+- `public/icons/icon.svg` - App icon
+- `components/InstallPrompt.tsx` - Install prompt for iOS/Android
+- `app/layout.tsx` - Meta tags and SW registration
+
+Users can install from browser menu or the install prompt.
+
+---
 
 ## Project Overview
 
-**SiteSense** is a job costing app for contractors (separate from Expenses Made Easy). It includes:
-- Job management with industry-specific fields
-- Estimates/bidding with PDF export
+**SiteSense** is a multi-industry job management platform for:
+- General Contractors
+- Residential Builders
+- Service/Repair Companies
+- Property Managers
+
+### Tech Stack
+| Component | Technology |
+|-----------|------------|
+| Framework | Next.js 16 (App Router) |
+| Database | Turso (libSQL/SQLite) |
+| ORM | Drizzle (schema only, raw SQL for queries) |
+| Auth | Custom JWT (bcrypt + jsonwebtoken) |
+| Styling | Tailwind CSS |
+| Charts | recharts |
+| Payments | Stripe (optional) |
+| Hosting | Vercel |
+
+### Key Features by Module
+
+**Core (All Industries):**
+- Jobs/Projects management
+- Estimates with PDF export
 - Time tracking
-- Tool tracking with QR codes
-- Permits, materials, phases/tasks
+- Expense tracking
+- Tool inventory with QR codes
+- Contacts/Clients
+- Crew management
 
-## Database Setup
+**Construction-Specific:**
+- Schedule of Values (SOV)
+- Bid packages & subcontractor bidding
+- Cost codes (CSI divisions)
+- RFIs & Submittals
+- Daily logs
 
-**Turso** (libSQL/SQLite) - NOT Supabase
-- URL: `libsql://sitesense-mcsmartbytes.aws-us-west-2.turso.io`
-- Token stored in `.env.local`
-- Schema created via `/api/db/init`
+**Property Management:**
+- Units/Spaces
+- Tenants
+- Leases
+- Work orders
+- Rent roll
 
-## Authentication System (NEW - Built This Session)
+### Industry Onboarding
 
-**Custom JWT Auth using Turso** - No Supabase required!
+Users select their industry on first login (`/onboarding`), which:
+- Enables relevant modules
+- Sets terminology preferences
+- Filters navigation menu
 
-### Auth Files Created:
-```
-lib/auth.ts                           # Auth utilities (hash, verify, JWT, cookies)
-contexts/AuthContext.tsx              # React context for auth state
-components/ProtectedRoute.tsx         # Route protection wrapper
-app/api/auth/register/route.ts        # User registration
-app/api/auth/login/route.ts           # User login
-app/api/auth/logout/route.ts          # User logout
-app/api/auth/session/route.ts         # Session check
-app/login/page.tsx                    # Login page
-app/register/page.tsx                 # Registration page
-```
+---
 
-### Auth Features:
-- Password hashing with bcrypt
-- JWT tokens stored in httpOnly cookies
-- 7-day token expiry
-- Protected routes with automatic redirect
-- User dropdown with logout in Navigation
-
-### Packages Installed for Auth:
-- `bcryptjs` - Password hashing
-- `jsonwebtoken` - JWT handling
-- `@types/bcryptjs` - TypeScript types
-- `@types/jsonwebtoken` - TypeScript types
-
-## Tool Tracking Feature (Complete)
-
-**Database Tables:**
-- `tools` - Main inventory with QR codes
-- `tool_categories` - 10 default categories
-- `tool_checkouts` - Check in/out history
-- `tool_maintenance` - Maintenance log
-- `crew_members` - For assignments
-
-**API Routes (using Turso):**
-- `/api/tools` - CRUD for tools
-- `/api/tools/categories` - GET categories
-- `/api/tools/checkout` - Check in/out operations
-- `/api/tools/scan` - Look up tool by QR code
-- `/api/db/init` - Initialize database schema
-
-**Pages:**
-- `/tools` - Tool inventory list, add/edit, QR generation, print labels
-- `/tools/scan` - Camera QR scanner, manual entry, check in/out forms
-
-**Packages Installed:**
-- `@libsql/client` - Turso database client
-- `qrcode` - QR code generation
-- `html5-qrcode` - Web camera QR scanning
-
-## Files Created/Modified This Session
-
-```
-# Authentication
-lib/auth.ts                           # Auth utilities
-contexts/AuthContext.tsx              # Auth context
-components/ProtectedRoute.tsx         # Route protection
-app/api/auth/register/route.ts        # Register API
-app/api/auth/login/route.ts           # Login API
-app/api/auth/logout/route.ts          # Logout API
-app/api/auth/session/route.ts         # Session API
-app/login/page.tsx                    # Login page
-app/register/page.tsx                 # Register page
-
-# Tool Tracking
-lib/turso.ts                          # Turso client utility
-app/api/tools/route.ts                # Tools CRUD
-app/api/tools/categories/route.ts     # Categories API
-app/api/tools/checkout/route.ts       # Check in/out API
-app/api/tools/scan/route.ts           # QR scan lookup API
-app/api/db/init/route.ts              # DB initialization
-app/(sitesense)/tools/page.tsx        # Tool inventory page
-app/(sitesense)/tools/scan/page.tsx   # QR scanner page
-
-# Updated
-components/Navigation.tsx             # Added logout, user menu
-app/page.tsx                          # Landing page + dashboard
-app/layout.tsx                        # Added AuthProvider
-.env.local                            # Added JWT_SECRET
-.env.example                          # Updated with JWT_SECRET
-```
-
-## Environment Variables Required
+## Environment Variables
 
 ```env
 # Turso Database
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your_turso_auth_token
+TURSO_DATABASE_URL=libsql://sitesense-mcsmartbytes.aws-us-west-2.turso.io
+TURSO_AUTH_TOKEN=your_token
 
-# JWT Auth
-JWT_SECRET=your_secure_jwt_secret_here
+# Auth
+JWT_SECRET=your_secret
 
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+# App URL
+NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+
+# Stripe (Optional)
+STRIPE_SECRET_KEY=sk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 ```
 
-## Dev Server
+---
 
-Running at: `http://localhost:3000`
-- `/` - Landing page (logged out) or Dashboard (logged in)
-- `/login` - Login page
-- `/register` - Registration page
-- `/tools` - Tool tracking (protected)
-- `/tools/scan` - QR scanner (protected)
-- `/jobs` - Jobs management
-- `/estimates` - Estimates
+## Database
 
-## How to Test
+**Initialize:** `POST /api/db/init`
 
-1. Start dev server: `npm run dev`
-2. Initialize database: `curl -X POST http://localhost:3000/api/db/init`
-3. Go to http://localhost:3000
-4. Register a new account
-5. Try the tool tracking feature
+50+ tables including:
+- `users`, `industries`, `industry_profiles`, `user_industry_settings`
+- `jobs`, `job_phases`, `job_tasks`, `permits`
+- `estimates`, `estimate_items`, `estimate_sections`
+- `schedule_of_values`, `sov_line_items`
+- `subcontractors`, `bid_packages`, `subcontractor_bids`
+- `time_entries`, `expenses`, `categories`
+- `tools`, `tool_categories`, `tool_checkouts`
+- `units`, `tenants`, `leases`, `work_orders`
+- And more...
 
-## Pages That Still Use Supabase (Legacy)
+---
 
-These pages were built before and still reference Supabase:
-- `/recurring` - Recurring expenses
-- `/budgets` - Budget tracking
-- `/mileage` - Mileage tracking
-- `/reports` - Tax reports
-- `/receipts` - Receipt gallery
-- `/settings` - User settings
+## Running Locally
 
-Note: These are from Expenses Made Easy and may not be relevant to SiteSense.
+```bash
+npm install
+npm run dev
+# Visit http://localhost:3000
+```
+
+To initialize database:
+```bash
+curl -X POST http://localhost:3000/api/db/init
+```
+
+---
+
+## Deployment
+
+Hosted on Vercel: https://sitesense-app.vercel.app (or your URL)
+
+Dependabot branches may need fixes for:
+- Tailwind v4 (requires `@tailwindcss/postcss`)
+- Stripe SDK v20+ (requires API version `2025-12-15.clover`)
+- React 19 types (`React.ReactNode` instead of `JSX.Element`)
+
+---
 
 ## Next Steps (Suggested)
 
-1. Test auth flow (register, login, logout)
-2. Test tool tracking with QR codes
-3. Build remaining SiteSense features:
-   - Jobs page (needs Turso conversion)
-   - Estimates page (needs Turso conversion)
-   - Bid helper / measurements calculator
-   - Time tracking
-4. Remove legacy Supabase pages if not needed
+1. Test PWA installation on mobile
+2. Add more report visualizations or export options
+3. Build out remaining features:
+   - Daily logs
+   - RFIs & Submittals
+   - Pro forma / draw schedules
+4. Add push notifications for:
+   - Tool return reminders
+   - Document expiry alerts
+   - Lease expiration warnings
+5. Consider syncing Drizzle schema with actual DB structure
+
+---
 
 ## Related Projects
 
-- `crm_made_easy` - Standalone CRM
-- `expenses_made_easy` - Expense tracker (separate project)
-- `inventory-tracker-app` - Has barcode scanner reference code
+- `expenses_made_easy` - Expense tracker (separate)
+- `crm_made_easy` - CRM system
+- `sealn-super-site` - Client website with embedded apps
