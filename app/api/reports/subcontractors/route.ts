@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     const subsResult = await client.execute({
       sql: `
         SELECT
-          id, company_name, trade,
+          id, company_name, primary_trade,
           coi_on_file, w9_on_file,
           insurance_expiry, license_expiry, workers_comp_expiry,
           rating
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       return {
         subcontractor_id: String(row.id),
         company_name: String(row.company_name),
-        trade: row.trade ? String(row.trade) : null,
+        trade: row.primary_trade ? String(row.primary_trade) : null,
         insurance_status: insuranceStatus,
         insurance_expiry: row.insurance_expiry ? String(row.insurance_expiry) : null,
         license_status: licenseStatus,
