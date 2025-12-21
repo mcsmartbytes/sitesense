@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
         SELECT COALESCE(SUM(hours * COALESCE(hourly_rate, 0)), 0) as total_labor_cost
         FROM time_entries
         WHERE user_id = ?
-        ${startDate ? 'AND entry_date >= ?' : ''}
-        ${endDate ? 'AND entry_date <= ?' : ''}
+        ${startDate ? 'AND date >= ?' : ''}
+        ${endDate ? 'AND date <= ?' : ''}
       `,
       args: [userId, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])],
     });
