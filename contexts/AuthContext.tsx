@@ -38,6 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Check if running in embedded mode (inside Books Made Easy)
+  // Use window.location to avoid Suspense requirement with useSearchParams
+  const isEmbedded = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embedded') === 'true';
+
   const refreshUser = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/session');
@@ -61,11 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   // Redirect to login if not authenticated and on protected route
+  // Skip redirect when embedded in another app
   useEffect(() => {
-    if (!loading && !user && !PUBLIC_ROUTES.includes(pathname)) {
+    if (!loading && !user && !PUBLIC_ROUTES.includes(pathname) && !isEmbedded) {
       router.push('/login');
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isEmbedded]);
 
   // Redirect to dashboard if authenticated and on public route
   useEffect(() => {
