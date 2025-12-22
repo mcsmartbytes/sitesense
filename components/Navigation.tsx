@@ -420,7 +420,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
 
   // Map menu items to their required modules
   const allWorkItems: (DropdownItem & { module?: string })[] = [
-    { href: '/jobs', label: getTerminology('job', 'Jobs') + 's', description: 'Manage projects & clients', module: 'jobs' },
+    { href: '/jobs', label: getTerminology('job', 'Jobs'), description: 'Manage projects & clients', module: 'jobs' },
     { href: '/estimates', label: 'Estimates', description: 'Create & send bids', module: 'estimates' },
     { href: '/sov', label: 'Schedule of Values', description: 'SOV & billing items', module: 'sov' },
     { href: '/bid-packages', label: 'Bid Packages', description: 'Manage trade scopes', module: 'bid_packages' },
