@@ -7,16 +7,20 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const userId = body.user_id;
-
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'user_id required in request body' },
-        { status: 400 }
-      );
-    }
+    let userId = body.user_id;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // If no user_id provided, get first user or create demo user
+    if (!userId) {
+      const { data: clients } = await supabase.from('clients').select('user_id').limit(1);
+      if (clients && clients.length > 0 && clients[0].user_id) {
+        userId = clients[0].user_id;
+      } else {
+        // Use a demo user ID
+        userId = 'demo-user-' + Date.now();
+      }
+    }
 
     // Seed Clients
     const clients = [
