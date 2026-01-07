@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #E2E6EC;
+  --foreground: #171717;
+}
+
+html, body {
+  min-height: 100vh;
+}
+
+body {
+  background: linear-gradient(135deg, #E2E6EC 0%, #D1D8E0 50%, #C4CDD8 100%);
+  background-attachment: fixed;
+  color: var(--foreground);
+}
+
+/* Override any bg-gray-50 or bg-white on main containers */
+.min-h-screen {
+  background: transparent !important;
+}
+
 /* PWA Install Prompt Animation */
 @keyframes slide-up {
   from {
