@@ -80,52 +80,6 @@ export async function POST() {
       });
     }
 
-    // Seed Time Entries
-    const today = new Date();
-    const timeEntries = [
-      { job_id: jobIds[0], hours: 8, hourly_rate: 45, entry_date: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: 'Supervised electrical rough-in' },
-      { job_id: jobIds[0], hours: 8, hourly_rate: 38, entry_date: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: 'Electrical rough-in - 2nd floor' },
-      { job_id: jobIds[1], hours: 10, hourly_rate: 35, entry_date: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: 'Roof tear-off - Building A' },
-      { job_id: jobIds[0], hours: 8, hourly_rate: 22, entry_date: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: 'Site cleanup and material staging' },
-      { job_id: jobIds[1], hours: 6, hourly_rate: 45, entry_date: new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], notes: 'Roof inspection and planning' },
-    ];
-
-    for (const t of timeEntries) {
-      await client.execute({
-        sql: `INSERT OR IGNORE INTO time_entries (id, user_id, job_id, hours, hourly_rate, entry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [randomUUID(), userId, t.job_id, t.hours, t.hourly_rate, t.entry_date, t.notes]
-      });
-    }
-
-    // Seed Expenses
-    const expenses = [
-      { job_id: jobIds[0], description: 'Electrical wire and conduit', amount: 2450.00, date: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], vendor: 'Electrical Supply Co' },
-      { job_id: jobIds[0], description: 'Scissor lift rental - 1 week', amount: 850.00, date: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], vendor: 'United Rentals' },
-      { job_id: jobIds[1], description: 'Roofing shingles - 50 squares', amount: 8500.00, date: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], vendor: 'ABC Supply' },
-      { job_id: jobIds[1], description: 'Underlayment and flashing', amount: 1200.00, date: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], vendor: 'ABC Supply' },
-      { job_id: jobIds[0], description: 'Electrical permit', amount: 450.00, date: new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], vendor: 'City of Denver' },
-    ];
-
-    for (const e of expenses) {
-      await client.execute({
-        sql: `INSERT OR IGNORE INTO expenses (id, user_id, job_id, description, amount, date, vendor, is_business) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [randomUUID(), userId, e.job_id, e.description, e.amount, e.date, e.vendor, 1]
-      });
-    }
-
-    // Seed Estimates
-    const estimates = [
-      { job_id: jobIds[2], client_name: 'Metro Development', client_email: 'construction@metrodev.com', status: 'sent', subtotal: 2500000, tax_rate: 0, total: 2500000 },
-      { job_id: jobIds[4], client_name: 'ABC Corporation', client_email: 'projects@abccorp.com', status: 'draft', subtotal: 45000, tax_rate: 0, total: 45000 },
-    ];
-
-    for (const est of estimates) {
-      await client.execute({
-        sql: `INSERT OR IGNORE INTO estimates (id, user_id, job_id, client_name, client_email, status, subtotal, tax_rate, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [randomUUID(), userId, est.job_id, est.client_name, est.client_email, est.status, est.subtotal, est.tax_rate, est.total]
-      });
-    }
-
     return NextResponse.json({
       success: true,
       message: 'Demo data seeded successfully',
@@ -133,9 +87,6 @@ export async function POST() {
         clients: clients.length,
         jobs: jobs.length,
         phases: phases.length,
-        time_entries: timeEntries.length,
-        expenses: expenses.length,
-        estimates: estimates.length,
       }
     });
   } catch (error: unknown) {
