@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/turso';
+import { getTurso } from '@/lib/turso';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'user_id required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = getTurso();
 
     const result = await db.execute({
       sql: `
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const db = getTurso();
     const id = crypto.randomUUID();
 
     await db.execute({
@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = getTurso();
 
     // Build dynamic update query
     const fields: string[] = [];
@@ -171,7 +171,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = getTurso();
     await db.execute({
       sql: 'DELETE FROM schedule_items WHERE id = ?',
       args: [id],
