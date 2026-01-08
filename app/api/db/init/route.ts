@@ -233,6 +233,24 @@ export async function POST() {
         created_at TEXT DEFAULT (datetime('now'))
       )`,
 
+      // Schedule Items (universal scheduler for permits, crews, milestones, etc.)
+      `CREATE TABLE IF NOT EXISTS schedule_items (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        item_type TEXT DEFAULT 'reminder',
+        job_id TEXT,
+        scheduled_date TEXT NOT NULL,
+        due_date TEXT,
+        status TEXT DEFAULT 'pending',
+        priority TEXT DEFAULT 'medium',
+        assigned_to TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`,
+
       // Expense Categories
       `CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
@@ -553,6 +571,10 @@ export async function POST() {
       `CREATE INDEX IF NOT EXISTS idx_crew_members_user_id ON crew_members(user_id)`,
       `CREATE INDEX IF NOT EXISTS idx_crew_assignments_crew_member_id ON crew_assignments(crew_member_id)`,
       `CREATE INDEX IF NOT EXISTS idx_crew_assignments_job_id ON crew_assignments(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_schedule_items_user_id ON schedule_items(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_schedule_items_job_id ON schedule_items(job_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_schedule_items_scheduled_date ON schedule_items(scheduled_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_schedule_items_status ON schedule_items(status)`,
       `CREATE INDEX IF NOT EXISTS idx_tool_checkouts_job_id ON tool_checkouts(checked_out_to_job_id)`,
 
       // =====================================================

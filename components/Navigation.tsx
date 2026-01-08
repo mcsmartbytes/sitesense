@@ -430,6 +430,7 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
     { href: '/properties/work-orders', label: 'Work Orders', description: 'Maintenance requests', module: 'work_orders' },
     { href: '/time-tracking', label: 'Time Tracking', description: 'Log hours worked' },
     { href: '/crew', label: 'Team & Crew', description: 'Manage workers & schedules', module: 'crews' },
+    { href: '/scheduler', label: 'Scheduler', description: 'Permits, deadlines & reminders' },
   ];
 
   // Filter work items based on enabled modules
