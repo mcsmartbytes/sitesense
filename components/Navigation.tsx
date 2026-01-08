@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIndustry } from '@/contexts/IndustryContext';
+import VoiceAssistant from '@/components/VoiceAssistant';
 
 // Quick Utilities Component
 function QuickUtilities({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -393,7 +394,31 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showUtilities, setShowUtilities] = useState(false);
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const isExpense = variant === 'expenses';
+
+  // Keyboard shortcut for voice assistant (V key)
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      // Ignore if user is typing in an input field
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      // Toggle voice assistant on 'V' key press
+      if (event.key === 'v' || event.key === 'V') {
+        event.preventDefault();
+        setShowVoiceAssistant(prev => !prev);
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -547,6 +572,26 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
 
         {/* Right side: utilities + user menu */}
         <div className="relative hidden md:flex items-center gap-3">
+          {/* Voice Assistant Button */}
+          {!isExpense && (
+            <div className="relative">
+              <button
+                onClick={() => setShowVoiceAssistant(!showVoiceAssistant)}
+                className={`p-2 rounded-lg transition-colors ${
+                  showVoiceAssistant
+                    ? 'text-red-400 bg-slate-700'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+                title="Voice Assistant (V)"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </button>
+              <VoiceAssistant isOpen={showVoiceAssistant} onClose={() => setShowVoiceAssistant(false)} />
+            </div>
+          )}
+
           {/* Quick Utilities Button */}
           {!isExpense && (
             <div className="relative">
@@ -661,6 +706,20 @@ export default function Navigation({ variant = 'sitesense' }: { variant?: Varian
 
                 <Link href="/reports" className="block py-2 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Reports</Link>
                 <Link href="/settings" className="block py-2 text-slate-200 hover:text-white" onClick={() => setShowMobileMenu(false)}>Settings</Link>
+
+                {/* Voice Assistant Button - Mobile */}
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    setShowVoiceAssistant(true);
+                  }}
+                  className="flex items-center gap-2 py-2 text-slate-200 hover:text-white w-full"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  Voice Assistant
+                </button>
               </>
             )}
 
